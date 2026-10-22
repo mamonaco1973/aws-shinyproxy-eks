@@ -1,0 +1,69 @@
+{
+  "domain": {
+    "dnsZone": "${DNS_ZONE}",
+    "netbios": "${NETBIOS}",
+    "userBaseDn": "${USER_BASE_DN}"
+  },
+  "groups": [
+    { "name": "${lower(NETBIOS)}-users",  "gidNumber": 10001 },
+    { "name": "us",             "gidNumber": 10002 },
+    { "name": "india",          "gidNumber": 10003 },
+    { "name": "linux-admins",   "gidNumber": 10004 },
+    { "name": "app-admins", "gidNumber": 10005 },
+    { "name": "service-accounts", "gidNumber": 10006 },
+    { "name": "vscode-users", "gidNumber": 10007 },
+    { "name": "rstudio-users", "gidNumber": 10008 }
+  ],
+  "users": [
+    {
+      "username": "jsmith",
+      "givenName": "John",
+      "surname": "Smith",
+      "password": "${jsmith_password}",
+      "uidNumber": 10001,
+      "gidNumber": 10001,
+      "primaryGroup": "${lower(NETBIOS)}-users",
+      "extraGroups": ["us", "linux-admins", "app-admins", "vscode-users", "rstudio-users", "Domain Admins"]
+    },
+    {
+      "username": "edavis",
+      "givenName": "Emily",
+      "surname": "Davis",
+      "password": "${edavis_password}",
+      "uidNumber": 10002,
+      "gidNumber": 10001,
+      "primaryGroup": "${lower(NETBIOS)}-users",
+      "extraGroups": ["us", "vscode-users"]
+    },
+    {
+      "username": "rpatel",
+      "givenName": "Raj",
+      "surname": "Patel",
+      "password": "${rpatel_password}",
+      "uidNumber": 10003,
+      "gidNumber": 10001,
+      "primaryGroup": "${lower(NETBIOS)}-users",
+      "extraGroups": ["india", "linux-admins", "app-admins", "vscode-users", "rstudio-users", "Domain Admins"]
+    },
+    {
+      "username": "akumar",
+      "givenName": "Amit",
+      "surname": "Kumar",
+      "password": "${akumar_password}",
+      "uidNumber": 10004,
+      "gidNumber": 10001,
+      "primaryGroup": "${lower(NETBIOS)}-users",
+      "extraGroups": ["india", "rstudio-users"]
+    },
+    {
+      "username": "shinyproxy",
+      "givenName": "ShinyProxy",
+      "surname": "Service",
+      "password": "${shinyproxy_password}",
+      "uidNumber": 10050,
+      "gidNumber": 10006,
+      "primaryGroup": "service-accounts",
+      "extraGroups": []
+    }
+  ]
+}

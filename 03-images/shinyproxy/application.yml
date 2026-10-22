@@ -1,0 +1,146 @@
+# ==============================================================================
+# application.yml - ShinyProxy Configuration
+# ------------------------------------------------------------------------------
+# Purpose:
+#   - Authenticate users against the mini-AD domain over LDAP.
+#   - Launch one VS Code session per user as an ECS Fargate task.
+#   - Proxy the browser (HTTP + WebSocket) to that task's private IP.
+#
+# Configuration Model:
+#   This file is baked into the image and is identical for every deployment.
+#   Everything environment-specific arrives as ${...} placeholders, which
+#   Spring resolves from the ShinyProxy task's environment (see 04-ecs).
+# ==============================================================================
+
+server:
+  # The ALB terminates TLS. Without this, ShinyProxy builds its redirects
+  # (e.g. to /login) as http:// and the browser bounces off port 80.
+  forward-headers-strategy: native
+  servlet:
+    session:
+      cookie:
+        secure: true
+
+proxy:
+  title: Development Environment
+  port: 8080
+  landing-page: /
+
+  # ----------------------------------------------------------------------------
+  # Look and feel
+  # ----------------------------------------------------------------------------
+  # Templates found here replace ShinyProxy's own; anything missing falls back
+  # to the stock page. /assets/** is served from <template-path>/assets.
+  # See templates/ in this directory.
+  template-path: /opt/shinyproxy/templates/theme
+  favicon-path: /opt/shinyproxy/templates/theme/assets/favicon.svg
+
+  # ----------------------------------------------------------------------------
+  # Session lifetime
+  # ----------------------------------------------------------------------------
+  # The ShinyProxy page sends heartbeats while the tab is open. A session is
+  # reclaimed 30 minutes after the last one (tab closed, laptop asleep), and
+  # in any case after 12 hours, so no task runs forever.
+  heartbeat-rate: 10000
+  heartbeat-timeout: 1800000
+  default-proxy-max-lifetime: 720
+
+  # A cold Fargate start pulls a ~1 GB image; give it time.
+  container-wait-time: 300000
+
+  # app-admins see every running session under /admin.
+  admin-groups: app-admins
+
+  # ----------------------------------------------------------------------------
+  # Authentication - LDAP against Samba AD
+  # ----------------------------------------------------------------------------
+  # Searches are scoped to CN=Users: searching from the domain root makes AD
+  # return referrals (DomainDnsZones, ForestDnsZones) that Spring LDAP reports
+  # as a failed login. Samba accepts plain simple binds here because the
+  # mini-AD module sets "ldap server require strong auth = no".
+  authentication: ldap
+  ldap:
+    url: "${LDAP_URL}/${LDAP_BASE_DN}"
+    user-search-base: CN=Users
+    user-search-filter: "(&(objectClass=user)(sAMAccountName={0}))"
+    group-search-base: CN=Users
+    group-search-filter: "(&(objectClass=group)(member={0}))"
+    manager-dn: ${LDAP_BIND_DN}
+    manager-password: ${LDAP_BIND_PASSWORD}
+
+  # ----------------------------------------------------------------------------
+  # Container backend - ECS Fargate
+  # ----------------------------------------------------------------------------
+  container-backend: ecs
+  ecs:
+    name: ${ECS_CLUSTER}
+    region: ${AWS_REGION}
+    subnets: ${SESSION_SUBNETS}
+    security-groups: ${SESSION_SECURITY_GROUPS}
+    service-wait-time: 300000
+    enable-cloud-watch: true
+    cloud-watch-group-prefix: /ecs/shinyproxy/
+
+  # ----------------------------------------------------------------------------
+  # Apps
+  # ----------------------------------------------------------------------------
+  # Each spec is one tile on the landing page. access-groups decides who sees
+  # it: vscode-users get the two VS Code sizes, rstudio-users get RStudio.
+  # Each user may run one session of each app.
+  specs:
+    - id: vscode
+      display-name: VS Code
+      description: 1 vCPU, 4 GB memory
+      access-groups: vscode-users
+      ecs-execution-role: ${SESSION_EXECUTION_ROLE_ARN}
+      ecs-efs-volumes: &efs-volumes
+        - name: home
+          file-system-id: ${EFS_ID}
+          root-directory: /home
+          transit-encryption: true
+        - name: efs
+          file-system-id: ${EFS_ID}
+          root-directory: /
+          transit-encryption: true
+      ecs-managed-secrets: &ldap-secret
+        - name: LDAP_BIND_PASSWORD
+          value-from: "${LDAP_SECRET_ARN}:password::"
+      container-image: ${VSCODE_IMAGE}
+      container-cpu-request: 1024
+      container-memory-request: 4096
+      container-volumes: &volumes
+        - home:/home
+        - efs:/efs
+      container-env: &session-env
+        LDAP_URL: ${LDAP_URL}
+        LDAP_BASE_DN: ${LDAP_BASE_DN}
+        LDAP_BIND_DN: ${LDAP_BIND_DN}
+      port: 8080
+
+    - id: vscode-large
+      display-name: VS Code (large)
+      description: 4 vCPU, 16 GB memory
+      access-groups: vscode-users
+      ecs-execution-role: ${SESSION_EXECUTION_ROLE_ARN}
+      ecs-efs-volumes: *efs-volumes
+      ecs-managed-secrets: *ldap-secret
+      container-image: ${VSCODE_IMAGE}
+      container-cpu-request: 4096
+      container-memory-request: 16384
+      container-volumes: *volumes
+      container-env: *session-env
+      port: 8080
+
+    - id: rstudio
+      display-name: RStudio
+      description: 2 vCPU, 8 GB memory
+      access-groups: rstudio-users
+      ecs-execution-role: ${SESSION_EXECUTION_ROLE_ARN}
+      ecs-efs-volumes: *efs-volumes
+      ecs-managed-secrets: *ldap-secret
+      container-image: ${RSTUDIO_IMAGE}
+      container-cpu-request: 2048
+      container-memory-request: 8192
+      container-volumes: *volumes
+      container-env: *session-env
+      port: 8787

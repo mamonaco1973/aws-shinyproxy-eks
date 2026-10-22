@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<!--
+  fragments/navbar.html - VS Code-style title bar
+
+  Replaces ShinyProxy's Bootstrap navbar on every page that includes it (app
+  list, app page, admin). It also carries the theme stylesheet, so those
+  pages pick up vscode.css without each template being copied.
+
+  Contract with ShinyProxy's JavaScript (keep when editing):
+    - #navbar wraps the bar; shiny.ui.js hides it in some modes.
+    - .navbar-height marks the element whose height is subtracted to size
+      the editor iframe and pad the body.
+    - Buttons are bound by class: app-details-current-btn, app-restart-btn,
+      app-stop-current-btn, app-pause-current-btn, report-issue-btn, and by
+      id: switchInstancesModal-btn, myAppsModal-btn.
+-->
+<html
+        xmlns:sec="http://www.thymeleaf.org/thymeleaf-extras-springsecurity4"
+        xmlns:th="http://www.thymeleaf.org">
+    <head></head>
+    <body>
+        <div id="navbar" th:fragment="navbar" th:if="${showNavbar}">
+            <link media="screen" rel="stylesheet" th:href="@{/assets/vscode.css}"/>
+            <header class="vs-titlebar navbar-height" role="banner">
+                <a class="brand" th:href="@{/}">
+                    <img th:src="@{/assets/logo.svg}" height="22" width="22" alt=""/>
+                    <span th:text="${title}"></span>
+                </a>
+
+                <span class="spacer"></span>
+
+                <span class="user" sec:authorize="isAuthenticated()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/>
+                    </svg>
+                    <span sec:authentication="name"></span>
+                </span>
+
+                <a class="tb-btn" role="button" id="switchInstancesModal-btn"
+                   th:if="${page == 'app' && appMaxInstances.get(appName) != 1}">Switch instance</a>
+                <a class="tb-btn app-details-current-btn" role="button"
+                   th:if="${page == 'app' && appMaxInstances.get(appName) == 1}">Details</a>
+                <a class="tb-btn app-restart-btn" role="button"
+                   th:if="${page == 'app' && appMaxInstances.get(appName) == 1}">Restart</a>
+                <a class="tb-btn app-stop-current-btn" role="button"
+                   th:if="${page == 'app' && appMaxInstances.get(appName) == 1}">Stop session</a>
+                <a class="tb-btn app-pause-current-btn" role="button"
+                   th:if="${page == 'app' && pauseSupported && appMaxInstances.get(appName) == 1}">Pause</a>
+                <a class="tb-btn" id="myAppsModal-btn" role="button"
+                   th:if="${page == 'index' && myAppsMode == 'Modal'}">My sessions</a>
+                <a class="tb-btn report-issue-btn" role="button" th:if="${isSupportEnabled}">Report issue</a>
+                <a class="tb-btn" role="button" th:href="@{/admin}" th:if="${isAdmin}">Admin</a>
+                <a class="tb-btn primary" role="button" th:href="@{${logoutUrl}}" th:if="${isLoggedIn}"
+                   onclick="try { sessionStorage.setItem('vs-signed-out', '1'); } catch (e) {}">Sign out</a>
+            </header>
+            <script>
+                // Same as the stock navbar: pad the body as soon as the bar renders.
+                let navbarHeight = $('.navbar-height').outerHeight();
+                if (navbarHeight !== undefined) {
+                    $('body').css('padding-top', navbarHeight + 'px').addClass('vscode-themed');
+                }
+            </script>
+        </div>
+    </body>
+</html>

@@ -1,0 +1,8 @@
+# The session images build with 03-images/ as their context (to reach
+# common/). Keep Terraform's working files out of it: the providers are
+# hundreds of MB, and state must never end up in an image layer.
+.terraform
+*.tfstate
+*.tfstate.*
+*.tf
+*.hcl

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<!--
+  auth-error.html - Authentication failure (configuration problem, not a wrong password)
+
+  Same card as the sign-in page (login.html); styles in assets/vscode.css.
+-->
+<html xmlns:th="http://www.thymeleaf.org">
+    <head lang="en">
+        <title th:text="${title}">Development Environment</title>
+        <meta charset="utf-8"/>
+        <meta content="width=device-width, initial-scale=1" name="viewport"/>
+        <link rel="icon" type="image/svg+xml" th:href="@{/assets/favicon.svg}"/>
+        <link rel="stylesheet" th:href="@{/assets/vscode.css}"/>
+        <script type="text/javascript">history.forward();</script>
+    </head>
+    <body class="card-page">
+        <main role="main">
+            <div class="card">
+                <img class="logo" th:src="@{/assets/logo.svg}" width="48" height="48" alt=""/>
+                <h1>Sign-in is unavailable</h1>
+                <p class="sub">An error occurred during authentication. Please report this to
+                    your administrator.</p>
+                <p class="sub">Administrators: this usually means a configuration problem with
+                    the directory connection. See the ShinyProxy log for details.</p>
+                <a class="button" th:href="${mainPage}">Back to sign in</a>
+            </div>
+        </main>
+    </body>
+</html>

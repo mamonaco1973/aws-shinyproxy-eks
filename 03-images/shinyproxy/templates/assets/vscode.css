@@ -1,0 +1,394 @@
+/* =============================================================================
+   vscode.css - VS Code dark theme for ShinyProxy
+   -----------------------------------------------------------------------------
+   Two jobs:
+     1. Card pages (sign-in, signed out, errors): this project's own markup,
+        styled after the original session broker - one centred #252526 card
+        on a #1e1e1e page.
+     2. ShinyProxy's own pages (app list, app page, admin): stock Bootstrap 3
+        markup, re-coloured here. Those pages load Bootstrap first and this
+        file through the navbar fragment, so these rules win on order.
+   ========================================================================== */
+
+:root {
+  color-scheme: dark;
+  --bg: #1e1e1e;
+  --panel: #252526;
+  --bar: #181818;
+  --border: #333;
+  --input: #3c3c3c;
+  --text: #cccccc;
+  --text-strong: #e7e7e7;
+  --muted: #8b8b8b;
+  --accent: #0e639c;
+  --accent-hover: #1177bb;
+  --link: #3794ff;
+  --err-bg: #5a1d1d;
+  --err-border: #be1100;
+  --err-text: #f48771;
+  --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* -----------------------------------------------------------------------------
+   1. Card pages
+   -------------------------------------------------------------------------- */
+
+body.card-page {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2rem 2.5rem;
+  width: 320px;
+  box-sizing: content-box;
+}
+
+.card .logo { display: block; margin: 0 auto 1rem; }
+
+.card h1 {
+  font-size: 1.15rem;
+  font-weight: 500;
+  margin: 0 0 .25rem;
+  text-align: center;
+  color: var(--text-strong);
+}
+
+.card .sub {
+  font-size: .85rem;
+  color: var(--muted);
+  margin: 0 0 1.5rem;
+  text-align: center;
+  line-height: 1.45;
+}
+
+.card label {
+  display: block;
+  font-size: .8rem;
+  color: #999;
+  margin-bottom: .25rem;
+}
+
+.card input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 1rem;
+  padding: .5rem;
+  background: var(--input);
+  border: 1px solid var(--input);
+  border-radius: 3px;
+  color: #eee;
+  font: inherit;
+}
+
+.card input:focus { outline: none; border-color: var(--accent); }
+
+.card button,
+.card .button {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: .55rem;
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  font: inherit;
+  font-size: .9rem;
+  text-align: center;
+  text-decoration: none;
+}
+
+.card button:hover,
+.card .button:hover { background: var(--accent-hover); color: #fff; }
+
+.err {
+  background: var(--err-bg);
+  border: 1px solid var(--err-border);
+  border-radius: 3px;
+  color: var(--err-text);
+  font-size: .85rem;
+  padding: .5rem;
+  margin-bottom: 1rem;
+}
+
+.notice {
+  background: #1b2b3a;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  color: var(--text);
+  font-size: .85rem;
+  padding: .5rem;
+  margin-bottom: 1rem;
+}
+
+.links { margin-top: 1.5rem; text-align: center; font-size: .78rem; }
+.links a { color: var(--link); text-decoration: none; margin: 0 .5rem; }
+.links a:hover { text-decoration: underline; }
+
+/* -----------------------------------------------------------------------------
+   2. ShinyProxy pages
+   -------------------------------------------------------------------------- */
+
+body#appPage,
+body.vscode-themed {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+}
+
+/* ---- Title bar (fragments/navbar.html) ---- */
+
+.vs-titlebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1030;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  background: var(--bar);
+  /* A shadow, not a border: shiny.ui.js sizes the editor from this bar's
+     content height, and a border would push the iframe 1 px too far. */
+  box-shadow: 0 1px 0 #2b2b2b;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.vs-titlebar .brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-strong);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.vs-titlebar .brand:hover,
+.vs-titlebar .brand:focus { color: #fff; text-decoration: none; }
+
+.vs-titlebar .spacer { flex: 1; }
+
+.vs-titlebar .user {
+  display: flex;
+  align-items: center;
+  gap: 6.4px;
+  color: var(--muted);
+  margin-right: 4px;
+}
+
+.vs-titlebar .tb-btn {
+  display: inline-block;
+  padding: 4px 10.4px;
+  border-radius: 3px;
+  border: 1px solid #3c3c3c;
+  background: transparent;
+  color: var(--text);
+  text-decoration: none;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.vs-titlebar .tb-btn:hover,
+.vs-titlebar .tb-btn:focus {
+  background: #2a2d2e;
+  color: #fff;
+  text-decoration: none;
+}
+
+.vs-titlebar .tb-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.vs-titlebar .tb-btn.primary:hover { background: var(--accent-hover); }
+
+/* ---- App list (index.html) ---- */
+
+#applist { margin-top: 56px; }
+
+#applist::before {
+  content: "Choose an environment";
+  display: block;
+  color: var(--text-strong);
+  font-size: 18.4px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+#applist::after {
+  content: "Each session runs in its own container. Your files in /home and /efs are the same in every one.";
+  display: block;
+  color: var(--muted);
+  font-size: 13.6px;
+  margin-top: 16px;
+}
+
+#applist .list-group { margin-top: 16px; }
+
+#applist .list-group-item {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 12px;
+  padding: 16px 20px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+#applist .list-group-item:hover { border-color: var(--accent); background: #2a2d2e; }
+
+#applist .list-group-item a,
+#applist .list-group-item a:hover,
+#applist .list-group-item a:focus,
+#applist .app-list-title {
+  color: var(--text-strong);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 16px;
+}
+
+#applist .app-list-description {
+  display: block;
+  color: var(--muted);
+  font-size: 13.6px;
+  margin-top: 4px;
+}
+
+#applist h2 { color: var(--text-strong); font-size: 16px; }
+
+.alert-info,
+.alert-warning {
+  background: var(--panel);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+/* ---- App page: loading and status screens (app.html) ---- */
+
+#appPage .loading {
+  /* stock display:none is kept; ShinyProxy's JS shows the right screen */
+  position: fixed;
+  top: 40px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg);
+  align-items: center;
+  justify-content: center;
+}
+
+#appPage .loading[style*="block"] { display: flex !important; }
+
+#appPage .loading-txt {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 32px 40px;
+  width: 320px;
+  margin: 0;
+  text-align: center;
+  font-size: 13.6px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+#appPage .loading-txt .caption {
+  display: block;
+  color: var(--text-strong);
+  font-size: 18.4px;
+  font-weight: 500;
+  margin-bottom: 5.6px;
+}
+
+/* Replaces the stock animated GIF with the broker's spinner. */
+#appPage .loading-img,
+.spinner {
+  width: 36px;
+  height: 36px;
+  margin: 0 auto 20px;
+  border: 3px solid var(--input);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  background: none;
+  animation: vs-spin 900ms linear infinite;
+}
+
+#appPage #reconnecting { height: auto; }
+#appPage #reconnecting .loading-img { margin: 16px auto; }
+
+@keyframes vs-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  #appPage .loading-img, .spinner { animation-duration: 3s; }
+}
+
+#appPage .btn-default {
+  background: var(--accent);
+  border: 0;
+  color: #fff;
+  border-radius: 3px;
+}
+
+#appPage .btn-default:hover { background: var(--accent-hover); color: #fff; }
+
+/* The editor iframe fills everything below the 40 px title bar. */
+#appPage #iframeinsert iframe { border: 0; }
+
+/* ---- Modals (app details, switch instance, admin) ---- */
+
+.modal-content {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.modal-header,
+.modal-footer { border-color: var(--border); }
+
+.modal-header .close { color: var(--text); opacity: .7; text-shadow: none; }
+
+.table > thead > tr > th,
+.table > tbody > tr > td { border-color: var(--border); }
+
+.table-striped > tbody > tr:nth-of-type(odd) { background: #2a2d2e; }
+
+a { color: var(--link); }
+
+/* ---- Admin page (admin.html): tabs, table panel, search box ---- */
+
+.nav-tabs { border-bottom-color: var(--border); }
+
+.nav-tabs > li > a { color: var(--link); }
+
+.nav-tabs > li > a:hover { background: #2a2d2e; border-color: var(--border); }
+
+.nav-tabs > li.active > a,
+.nav-tabs > li.active > a:hover,
+.nav-tabs > li.active > a:focus {
+  background: var(--panel);
+  color: var(--text-strong);
+  border-color: var(--border) var(--border) transparent;
+}
+
+.tab-content { border-color: var(--border) !important; background: var(--panel); }
+
+.vscode-themed input[type="search"],
+.vscode-themed .form-control {
+  background: var(--input);
+  border: 1px solid var(--input);
+  color: #eee;
+  box-shadow: none;
+}

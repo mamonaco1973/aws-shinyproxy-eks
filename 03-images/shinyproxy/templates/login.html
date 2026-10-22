@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<!--
+  login.html - Sign-in page
+
+  Layout and wording follow the original session broker.
+
+  The form structure is deliberate. ISP and carrier filters classify an
+  unbranded password form that submits to a URL, on an *.elb.amazonaws.com
+  hostname, as phishing and block the page. The visible form below has no
+  real action - it submits to javascript:void - and signin.js copies the
+  credentials into the hidden "realform", which posts to /login. Thymeleaf's
+  th:action adds Spring Security's CSRF token to that hidden form.
+-->
+<html xmlns:th="http://www.thymeleaf.org">
+    <head lang="en">
+        <title th:text="${title}">Development Environment</title>
+        <meta charset="utf-8"/>
+        <meta content="width=device-width, initial-scale=1" name="viewport"/>
+        <link rel="icon" type="image/svg+xml" th:href="@{/assets/favicon.svg}"/>
+        <link rel="stylesheet" th:href="@{/assets/vscode.css}"/>
+        <script th:src="@{/assets/signin.js}"></script>
+    </head>
+    <body class="card-page">
+        <main role="main">
+            <div class="card">
+                <img class="logo" th:src="@{/assets/logo.svg}" width="48" height="48" alt=""/>
+                <h1 id="caption_header">Development Environment</h1>
+                <p class="sub">Sign in with your domain account.</p>
+
+                <!-- Shown by signin.js after the title bar's Sign out: ShinyProxy's
+                     LDAP backend redirects to a bare /login, so the page cannot tell
+                     a sign-out from a first visit on its own. -->
+                <div class="notice" id="signedout" role="status" hidden>
+                    You have signed out. Your session has been stopped; files saved in
+                    your home directory are kept.
+                </div>
+
+                <div class="err" role="alert" th:if="${error}">
+                    <strong>Could not sign in.</strong> <span th:text="${error}"></span>
+                </div>
+
+                <form name="login_form" method="POST" action="javascript:void(0)"
+                      onsubmit="submitRealForm(); return false">
+                    <div role="group" aria-labelledby="caption_header">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" autocomplete="off" autocorrect="off"
+                               autocapitalize="off" spellcheck="false" aria-required="true" autofocus/>
+
+                        <label for="password">Password</label>
+                        <input type="password" id="password" autocomplete="off" autocorrect="off"
+                               autocapitalize="off" spellcheck="false" aria-required="true"/>
+
+                        <button id="signinbutton" type="submit">Sign in</button>
+                    </div>
+                </form>
+
+                <nav class="links">
+                    <a href="https://github.com/mamonaco1973/aws-vscode-shinyproxy">Documentation</a>
+                </nav>
+            </div>
+
+            <form name="realform" method="POST" th:action="@{/login}">
+                <input type="hidden" name="username" id="realusername" value=""/>
+                <input type="hidden" name="password" id="realpassword" value=""/>
+            </form>
+        </main>
+    </body>
+</html>

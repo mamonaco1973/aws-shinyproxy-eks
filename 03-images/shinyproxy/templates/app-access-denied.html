@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<!--
+  app-access-denied.html - Shown when the user's groups do not include the app's access-groups
+
+  Same card as the sign-in page (login.html); styles in assets/vscode.css.
+-->
+<html xmlns:th="http://www.thymeleaf.org">
+    <head lang="en">
+        <title th:text="${title}">Development Environment</title>
+        <meta charset="utf-8"/>
+        <meta content="width=device-width, initial-scale=1" name="viewport"/>
+        <link rel="icon" type="image/svg+xml" th:href="@{/assets/favicon.svg}"/>
+        <link rel="stylesheet" th:href="@{/assets/vscode.css}"/>
+    </head>
+    <body class="card-page">
+        <main role="main">
+            <div class="card">
+                <img class="logo" th:src="@{/assets/logo.svg}" width="48" height="48" alt=""/>
+                <h1>Access denied</h1>
+                <p class="sub">Your account is not in a group that may use this environment.
+                    Contact your administrator if you believe this is a mistake.</p>
+                <a class="button" th:href="@{/}">Back to environments</a>
+            </div>
+        </main>
+    </body>
+</html>
