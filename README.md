@@ -1,27 +1,27 @@
-# AWS ShinyProxy on ECS Fargate
+# AWS ShinyProxy on EKS Auto Mode
 
-This project is a model for deploying **browser-based apps** on Amazon Web Services (AWS) the way Posit Workbench does: users sign in to one web page, pick an app, and get a private session running under their own identity, with their files on shared storage. It ships two apps, **VS Code** (`code-server`) and **RStudio** (RStudio Server), and every session is its own **ECS Fargate task**.
+This project is a model for deploying **browser-based apps** on Amazon Web Services (AWS) the way Posit Workbench does: users sign in to one web page, pick an app, and get a private session running under their own identity, with their files on shared storage. It ships two apps, **VS Code** (`code-server`) and **RStudio** (RStudio Server), and every session is its own **Kubernetes pod** on an **Amazon EKS Auto Mode** cluster.
 
 [ShinyProxy](https://www.shinyproxy.io/) is the multi-user layer. Both apps are fundamentally *single-user* servers, so something has to sit in front of them. ShinyProxy:
 
 1. Authenticates the user against Active Directory over LDAP and checks group membership per app.
-2. Launches a dedicated Fargate task for that user's app session through the ECS API.
+2. Creates a dedicated pod for that user's app session through the Kubernetes API.
 3. Reverse-proxies the browser to it, including the WebSocket traffic both apps run on.
-4. Stops the task when the session ends.
+4. Deletes the pod when the session ends.
 
-There are no servers to scale. The ECS cluster runs only Fargate tasks: one ShinyProxy task as the control plane, plus one task per active session. With nobody signed in, the only cluster compute running is ShinyProxy. Adding another app is a new container image plus a new entry in ShinyProxy's configuration.
+There are no node groups to size. In Auto Mode, AWS runs Karpenter for you: when a session pod cannot be scheduled, it launches an EC2 instance sized for it, and it removes instances once nothing is left on them. Sessions pack onto shared nodes, so a session that lands on a warm node skips both the instance launch and the image pull. With nobody signed in, the only compute running is the node that hosts ShinyProxy. Adding another app is a new container image plus a new entry in ShinyProxy's configuration.
 
 Key capabilities demonstrated:
 
-1. **Per-user Fargate sessions** – Each session is its own task with guaranteed CPU and memory, its own network interface, and nothing shared with other users' sessions.
+1. **Per-user session pods** – Each session is its own pod with guaranteed CPU and memory (requests equal limits), fenced off from every other session by a Kubernetes network policy.
 2. **Per-app access by AD group** – `vscode-users` see VS Code, `rstudio-users` see RStudio; ShinyProxy hides an app from anyone outside its group.
 3. **Real POSIX identity** – Every app runs as the user's AD `uidNumber`/`gidNumber` with their AD groups, so files on shared storage have the same ownership everywhere, and every owner shows as a name.
-4. **EFS-Backed Home Directories** – EFS is mounted at `/home` and `/efs` in every session, so a script written in VS Code can be run in RStudio, and both are visible through the Samba gateway.
+4. **EFS-Backed Home Directories** – EFS is mounted at `/home` and `/efs` in every session through the EFS CSI driver, so a script written in VS Code can be run in RStudio, and both are visible through the Samba gateway.
 5. **Mini Active Directory Integration** – A Samba-based mini-AD domain controller provides authentication, groups and DNS.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="architecture-dark.svg">
-  <img alt="A browser reaches an internet-facing load balancer over HTTPS; it forwards to ShinyProxy, an ECS service, which signs users in against the mini-AD domain controller over LDAP, then calls ECS RunTask to launch a dedicated Fargate task running the chosen app, VS Code or RStudio, for each user and proxies HTTP and WebSocket traffic to it. ECS pulls the images from ECR and injects the LDAP bind password from Secrets Manager. Each session task resolves the user's uid and gid over LDAP, mounts the shared EFS file system for /home and /efs, and reaches Open VSX and package mirrors through a NAT gateway. A domain-joined Samba gateway mounts the same EFS file system and shares it over SMB." src="architecture-light.svg">
+  <img alt="A browser reaches an internet-facing load balancer over HTTPS; it forwards to ShinyProxy, a single pod in an EKS Auto Mode cluster, which signs users in against the mini-AD domain controller over LDAP, then asks the Kubernetes API to create a dedicated pod running the chosen app, VS Code or RStudio, for each user and proxies HTTP and WebSocket traffic to it. Auto Mode launches nodes on demand to run the pods and pulls the images from ECR; the LDAP bind password comes from Secrets Manager by way of a Kubernetes secret. Each session pod resolves the user's uid and gid over LDAP, mounts the shared EFS file system for /home and /efs through the EFS CSI driver, and reaches Open VSX and package mirrors through a NAT gateway. A domain-joined Samba gateway mounts the same EFS file system and shares it over SMB." src="architecture-light.svg">
 </picture>
 
 The diagram is generated by [make_diagram.py](make_diagram.py) (`python3 make_diagram.py`). The Windows admin host is left off — it administers AD and plays no part in a session.
@@ -32,14 +32,17 @@ The diagram is generated by [make_diagram.py](make_diagram.py) (`python3 make_di
 * [Install AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
 * [Install Latest Terraform](https://developer.hashicorp.com/terraform/install)
 * [Install Docker](https://docs.docker.com/engine/install/) — the images are built locally and pushed to ECR
+* [Install kubectl](https://kubernetes.io/docs/tasks/tools/) — optional; Terraform deploys into the cluster itself, but `kubectl` is how you look at pods and logs afterwards
 
 If this is your first time watching our content, we recommend starting with this video: [AWS + Terraform: Easy Setup](https://youtu.be/BCMQo0CB9wk). It provides a step-by-step guide to properly configure Terraform and the AWS CLI.
+
+Every name this lab creates (VPC, AD domain, secrets, ECR repositories, load balancer, cluster) carries an `eks` marker, so it can run alongside the ECS edition of the lab in the same account and region.
 
 ## Download this Repository
 
 ```bash
-git clone https://github.com/mamonaco1973/aws-vscode-shinyproxy.git
-cd aws-vscode-shinyproxy
+git clone https://github.com/mamonaco1973/aws-shinyproxy-eks.git
+cd aws-shinyproxy-eks
 ```
 
 ## Build the Code
@@ -47,13 +50,14 @@ cd aws-vscode-shinyproxy
 Run [check_env](check_env.sh) to validate your environment, then run [apply](apply.sh) to provision the infrastructure.
 
 ```bash
-develop-vm:~/aws-vscode-shinyproxy$ ./apply.sh
+develop-vm:~/aws-shinyproxy-eks$ ./apply.sh
 NOTE: Validating required commands in PATH.
 NOTE: Found required command: aws
 NOTE: Found required command: terraform
 NOTE: Found required command: jq
 NOTE: Found required command: docker
 NOTE: All required commands are available.
+NOTE: Found optional command: kubectl
 NOTE: Verifying Docker daemon access...
 NOTE: Docker daemon reachable.
 NOTE: Verifying AWS CLI connectivity...
@@ -61,20 +65,23 @@ NOTE: AWS CLI authentication successful.
 NOTE: Building Active Directory instance...
 ```
 
-The deployment runs in four phases:
+The deployment runs in five phases:
 
 | Phase | Directory | What it builds |
 |-------|--------------|----------------|
 | 1 | `01-directory` | Samba 4 mini-AD domain controller, VPC, NAT, credentials in Secrets Manager |
 | 2 | `02-servers` | EFS, Windows AD admin host, Linux/Samba gateway |
 | 3 | `03-images` | ECR repositories; builds and pushes the VS Code, RStudio and ShinyProxy images |
-| 4 | `04-ecs` | ECS cluster, ShinyProxy service, ALB, IAM roles, security groups |
+| 4 | `04-eks` | EKS Auto Mode cluster, EFS CSI driver add-on, IAM roles, ALB with a self-signed certificate |
+| 5 | `05-shinyproxy` | Namespace, RBAC, LDAP secret, EFS volume, network policies, the ShinyProxy Deployment and its binding to the ALB |
 
-All images share one tag: a hash of `03-images/common`, `vscode`, `rstudio` and `shinyproxy`. Re-running `apply.sh` after changing any of them produces a new tag, a new ShinyProxy task definition and a rolling restart; re-running it with nothing changed leaves the service alone.
+Phases 4 and 5 are separate so the Kubernetes provider is configured from a cluster that already exists. Phase 5 authenticates with your AWS identity, which phase 4 makes cluster admin, so no kubeconfig is needed; if `kubectl` is installed, `apply.sh` points it at the new cluster at the end.
+
+All images share one tag: a hash of `03-images/common`, `vscode`, `rstudio` and `shinyproxy`. Re-running `apply.sh` after changing any of them produces a new tag, a changed ShinyProxy Deployment and a ShinyProxy restart; re-running it with nothing changed leaves the cluster alone.
 
 The two session images build with `03-images/` as their Docker context so they can share the identity code in `common/`; `03-images/.dockerignore` keeps that phase's Terraform files out of the context.
 
-The images are built for `linux/amd64` to match the Fargate tasks, so building on an ARM machine relies on Docker's emulation and is slow.
+The images are built for `linux/amd64` to match the cluster's nodes (every pod is pinned to `amd64`), so building on an ARM machine relies on Docker's emulation and is slow.
 
 ### Build Results
 
@@ -82,14 +89,15 @@ When the deployment completes, the following resources are created:
 
 - **Networking:**
   - A VPC with public and private subnets
-  - Internet Gateway and NAT Gateway; ShinyProxy and session tasks run in the private subnets
+  - Internet Gateway and NAT Gateway; the cluster's nodes and pods run in the private subnets
   - DNS resolution provided by the Mini-AD domain controller
 
 - **Security & IAM:**
-  - Security groups for the ALB, ShinyProxy, session tasks, the domain controller and EFS
-  - A ShinyProxy task role allowed to register task definitions, run and stop tasks in this cluster, and pass the session execution role — nothing else
-  - Execution roles that pull images from ECR, write CloudWatch logs and read the one LDAP secret
-  - Secrets in AWS Secrets Manager for the AD administrator, the test users and the ShinyProxy LDAP service account
+  - A security group for the ALB, plus rules letting it reach ShinyProxy's ports on the cluster security group
+  - Network policies: session pods accept the app ports from ShinyProxy only, and cannot reach the instance metadata endpoint
+  - IAM roles for the EKS cluster, its Auto Mode nodes (join the cluster, pull from ECR) and the EFS CSI controller — none for ShinyProxy or the sessions
+  - A namespace-scoped Kubernetes role letting ShinyProxy create and delete pods in its own namespace, and nothing else
+  - Secrets in AWS Secrets Manager for the AD administrator, the test users and the ShinyProxy LDAP service account; the last is copied into a Kubernetes secret
 
 - **Active Directory Server:**
   - Ubuntu EC2 instance running Samba 4 as a Domain Controller and DNS server
@@ -97,18 +105,18 @@ When the deployment completes, the following resources are created:
 
 - **Amazon EFS:**
   - Mount targets in the private subnets
-  - Mounted at `/home` and `/efs` in every session task, with encryption in transit
+  - One static PersistentVolume, mounted at `/home` and `/efs` in every session pod, with encryption in transit
   - `/efs/extensions` provided as a shared staging area for VSIX packages
 
 - **Container Images (ECR):**
-  - `vscode-session` — `code-server` 4.141.0 plus the shared start-up code that adopts the user's AD identity
-  - `rstudio-session` — `rocker/rstudio` 4.6.1 (R plus RStudio Server) with the same identity code
-  - `shinyproxy` — ShinyProxy 3.2.4 with this project's `application.yml` and page templates baked in
+  - `vscode-session-eks` — `code-server` 4.141.0 plus the shared start-up code that adopts the user's AD identity
+  - `rstudio-session-eks` — `rocker/rstudio` 4.6.1 (R plus RStudio Server) with the same identity code
+  - `shinyproxy-eks` — ShinyProxy 3.2.4 with this project's `application.yml` and page templates baked in
 
-- **ECS Cluster (Fargate):**
-  - `shinyproxy` service: one task, behind the ALB, with ShinyProxy's health endpoint on port 9090
-  - Session tasks, started and stopped by ShinyProxy on demand — none exist until someone signs in
-  - CloudWatch log groups for ShinyProxy and for each app
+- **EKS Cluster (Auto Mode):**
+  - Built-in `general-purpose` node pool for ShinyProxy and the sessions, `system` pool for add-ons
+  - `shinyproxy` Deployment: one pod, registered in the ALB's target group by a `TargetGroupBinding`, with ShinyProxy's health endpoint on port 9090
+  - Session pods, created and deleted by ShinyProxy on demand — none exist until someone signs in
 
 - **Validation:**
   - `./validate.sh` reports the URL, confirms ShinyProxy answers `/login`, and prints `jsmith`'s credentials
@@ -117,7 +125,7 @@ When the deployment completes, the following resources are created:
 
 ### ShinyProxy
 
-ShinyProxy runs as an ECS service with a single task. Its configuration is [03-images/shinyproxy/application.yml](03-images/shinyproxy/application.yml); everything environment-specific (cluster, subnets, EFS ID, image URI, DC address) arrives as `${...}` placeholders filled from the task's environment by Terraform, so the image is the same for every deployment.
+ShinyProxy runs as a Kubernetes Deployment with a single pod in the `shinyproxy` namespace. Its configuration is [03-images/shinyproxy/application.yml](03-images/shinyproxy/application.yml); everything environment-specific (namespace, image URIs, DC address) arrives as `${...}` placeholders filled from the pod's environment by Terraform, so the image is the same for every deployment.
 
 - **Sign-in.** LDAP against the domain controller, using the `shinyproxy` service account to search `CN=Users` for the user and their groups, then binding as the user to check the password.
 - **Access.** Each app lists the AD groups that may use it (`access-groups`); a user sees only the apps their groups allow. Members of `app-admins` also get ShinyProxy's admin page at `/admin`, which lists every running session.
@@ -125,13 +133,15 @@ ShinyProxy runs as an ECS service with a single task. Its configuration is [03-i
 
   | App | Group | CPU | Memory | Port |
   |-----|-------|-----|--------|------|
-  | VS Code | `vscode-users` | 1 vCPU | 4 GB | 8080 |
-  | VS Code (large) | `vscode-users` | 4 vCPU | 16 GB | 8080 |
-  | RStudio | `rstudio-users` | 2 vCPU | 8 GB | 8787 |
+  | VS Code | `vscode-users` | 1 vCPU | 4 GiB | 8080 |
+  | VS Code (large) | `vscode-users` | 4 vCPU | 16 GiB | 8080 |
+  | RStudio | `rstudio-users` | 2 vCPU | 8 GiB | 8787 |
 
-- **Launch.** For each session ShinyProxy registers a one-off task definition (`sp-task-definition-<id>`), calls `RunTask` into the private subnets, waits for the task to reach `RUNNING`, and proxies `/app_proxy/<id>/` to the task's private IP on the app's port. A cold start takes about 40 seconds for VS Code; RStudio's image is several times larger, so it takes longer. Most of that is Fargate provisioning the task and pulling the image.
-- **Lifetime.** The ShinyProxy page sends heartbeats while the tab is open. A session is stopped 30 minutes after the last one (tab closed, laptop asleep) and in any case after 12 hours. Stopping a session stops its task and deletes its task definition.
+- **Launch.** For each session ShinyProxy creates a pod (`sp-pod-<id>-0`) in its namespace, waits for it to be ready, and proxies `/app_proxy/<id>/` to the pod's IP on the app's port. A short list of JSON patches in `application.yml` finishes each pod: it mounts the EFS claim, withholds the service account token, and marks the pod `karpenter.sh/do-not-disrupt` so Auto Mode never evicts a live session to consolidate nodes. The bind password reaches the pod as a `secretKeyRef` to the `ldap-bind` secret; ShinyProxy never writes the value into a pod spec.
+- **Start-up time.** A session that fits on a node already running starts in seconds once that node has pulled the image. One that needs a new node waits for Auto Mode to launch it and for the image pull; RStudio's image is several times larger than VS Code's. ShinyProxy waits up to five minutes.
+- **Lifetime.** The ShinyProxy page sends heartbeats while the tab is open. A session is stopped 30 minutes after the last one (tab closed, laptop asleep) and in any case after 12 hours. Stopping a session deletes its pod; Auto Mode removes the node once nothing is left on it.
 - **Sign out.** ShinyProxy's own title bar sits above every app, so no button has to be injected into the apps themselves.
+- **Load balancer.** The ALB and its target group belong to Terraform (phase 4), so the certificate can be issued for the ALB's DNS name before anything runs in the cluster. A `TargetGroupBinding` (phase 5) hands the target group to Auto Mode's load balancer controller, which keeps the ShinyProxy pod's IP registered as the pod is replaced.
 
 ### Look and Feel
 
@@ -152,7 +162,7 @@ Every app image shares one start-up library, [03-images/common/session-identity.
 2. Looks the user up in AD with the read-only service account and reads `uidNumber` and `gidNumber`.
 3. Loads **every** AD user and group into the container's `/etc/passwd` and `/etc/group` ([directory-sync.py](03-images/common/directory-sync.py)), so any file owner on EFS shows as a name. Entries without POSIX IDs, below 1000, or clashing with a local account are skipped. It is a snapshot taken at session start.
 4. Gives `linux-admins` members sudo, and creates the home directory on EFS if this user has never signed in anywhere.
-5. Deletes the LDAP bind password, which ECS injected from Secrets Manager.
+5. Deletes the LDAP bind password, which Kubernetes injected from the `ldap-bind` secret.
 
 Each app's entrypoint then starts its server with a clean environment (`env -i`), so no `LDAP_*` variable reaches the app or the user:
 
@@ -167,9 +177,9 @@ Each app's entrypoint then starts its server with a clean environment (`env -i`)
 |-------|----------|-------------------------|
 | Settings, keybindings, snippets | `~/.local/share/code-server/User` on EFS | Yes |
 | Installed extensions | `~/.local/share/code-server/extensions` on EFS | Yes |
-| Editor layout, recent files, workspace state (SQLite) | Task-local disk, symlinked into place | No |
+| Editor layout, recent files, workspace state (SQLite) | Pod-local disk, symlinked into place | No |
 
-SQLite over NFS is a well-known corruption risk, so the two SQLite stores (`globalStorage` and `workspaceStorage`) are symlinked onto the task's local disk. The cost is that open tabs and layout reset with each session; settings, extensions and every file in the home directory do not. New users start with the Dark Modern theme.
+SQLite over NFS is a well-known corruption risk, so the two SQLite stores (`globalStorage` and `workspaceStorage`) are symlinked onto the pod's local disk. The cost is that open tabs and layout reset with each session; settings, extensions and every file in the home directory do not. New users start with the Dark Modern theme.
 
 RStudio keeps its user state (`~/.config/rstudio`, `~/.local/share/rstudio`) and installed R packages (`~/R`) in the home directory on EFS, so they persist; `rserver`'s own database stays on local disk. R installs packages from Posit Package Manager's prebuilt Linux binaries, so most `install.packages()` calls need no compiler. New users start with a dark editor theme and never save `.RData` workspaces.
 
@@ -177,12 +187,14 @@ RStudio keeps its user state (`~/.config/rstudio`, `~/.local/share/rstudio`) and
 
 These are deliberate choices, not oversights:
 
-- **One ShinyProxy task.** ShinyProxy holds session state in memory, and its ECS backend cannot re-adopt running tasks after a restart. On shutdown it stops every session rather than orphan them, so a ShinyProxy restart or redeploy signs everyone out. Running two would need Redis (`proxy.store-mode: Redis`). The service is configured so the old task is gone before a new one starts — two ShinyProxies must never manage the same sessions.
-- **Cold starts instead of idle capacity.** Every session starts a fresh Fargate task, about 50 seconds. Nothing is held warm, which is what lets the cluster scale to zero.
-- **Pay per session-hour.** Fargate bills for each task while it runs. That favors bursty use; many all-day users may be cheaper on reserved EC2 capacity.
-- **Ephemeral local disk.** Anything outside `/home` and `/efs` — including packages installed with `sudo apt` — is lost when the task stops. Add tools to the app's Dockerfile instead.
-- **No task role on sessions.** The apps have no reason to call AWS, and a role would hand every user its credentials.
-- **App authentication switched off.** `code-server --auth none` and `rserver auth-none` are safe only because the session security group admits the app ports (8080, 8787) from ShinyProxy alone: no route from the ALB, and no session-to-session traffic. Do not widen it.
+- **One ShinyProxy pod.** ShinyProxy holds session state in memory. On shutdown it deletes every session pod rather than orphan them, so a ShinyProxy restart or redeploy signs everyone out. Running two would need Redis (`proxy.store-mode: Redis`). The Deployment uses the `Recreate` strategy so the old pod is gone before a new one starts — two ShinyProxies must never manage the same sessions.
+- **Nodes come and go.** Auto Mode launches nodes for pending pods and removes empty ones, so the cluster shrinks to the single node running ShinyProxy when nobody is signed in. `do-not-disrupt` keeps it from moving live sessions or ShinyProxy to save money, but Auto Mode still retires every node within 14 days for patching. When the ShinyProxy node goes, everyone is signed out, as on any ShinyProxy restart.
+- **Shared nodes, shared kernel.** Sessions pack onto shared EC2 instances, which is what makes warm starts fast and capacity cheap. The isolation between two users on one node is a container boundary and a network policy, not a separate VM, and `linux-admins` members are root inside their own container. Keep sudo for people you would trust with a shell on the node.
+- **Pay per node-hour.** EC2 bills for each node while it runs, whether it holds one session or ten, plus the Auto Mode management fee per instance and the EKS control plane per hour. Dense use is cheap; a single user at a time pays for a whole node.
+- **Ephemeral local disk.** Anything outside `/home` and `/efs` — including packages installed with `sudo apt` — is lost when the pod is deleted. Add tools to the app's Dockerfile instead.
+- **No AWS credentials in sessions.** The apps have no reason to call AWS. Session pods get no IAM role and no service account token, and the network policy blocks the instance metadata endpoint, so a user cannot borrow the node's role either.
+- **App authentication switched off.** `code-server --auth none` and `rserver auth-none` are safe only because the session network policy admits the app ports (8080, 8787) from the ShinyProxy pod alone: no route from the ALB, and no session-to-session traffic. Do not widen it. Every pod shares its node's security group, so this cannot be done with security groups.
+- **Bind password in a Kubernetes secret.** Phase 5 copies the LDAP service account's password from Secrets Manager into the `ldap-bind` secret, so it is also in that phase's Terraform state. The account can only read the directory. The Secrets Store CSI driver would avoid the copy, at the cost of another add-on.
 - **Plain LDAP inside the VPC.** ShinyProxy and the sessions bind on port 389, which the mini-AD module allows (`ldap server require strong auth = no`). The traffic never leaves the VPC; switch to LDAPS before reusing this anywhere real.
 - **HTTPS with a self-signed certificate.** The ALB terminates TLS using a certificate generated by Terraform and imported into ACM; port 80 only redirects to 443. Over plain HTTP, ISP and carrier security products inspect the page inline, classify the sign-in form as phishing and block it, and some mobile carriers corrupt the WebSocket upgrade. TLS ends both. The certificate's common name matches the ALB DNS name, so the only browser complaint is the untrusted issuer.
 
@@ -220,17 +232,17 @@ The core editor, terminal, and file operations work regardless, which is why the
 Export the certificate from Terraform:
 
 ```bash
-cd 04-ecs
-terraform output -raw alb_certificate_pem > shinyproxy-alb.crt
+cd 04-eks
+terraform output -raw alb_certificate_pem > shinyproxy-eks-alb.crt
 ```
 
 Then add it to your workstation's trust store:
 
-- **Windows** — `certmgr.msc` → Trusted Root Certification Authorities → Certificates → right-click → All Tasks → Import, and select `shinyproxy-alb.crt`. Restart Chrome.
-- **macOS** — `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain shinyproxy-alb.crt`
-- **Linux (Chrome)** — `certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n shinyproxy-alb -i shinyproxy-alb.crt`
+- **Windows** — `certmgr.msc` → Trusted Root Certification Authorities → Certificates → right-click → All Tasks → Import, and select `shinyproxy-eks-alb.crt`. Restart Chrome.
+- **macOS** — `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain shinyproxy-eks-alb.crt`
+- **Linux (Chrome)** — `certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n shinyproxy-eks-alb -i shinyproxy-eks-alb.crt`
 
-Each `apply` creates a new load balancer with a new DNS name and therefore a new certificate, so this is repeated per deployment. To avoid it altogether, replace `04-ecs/acm.tf` with a DNS-validated ACM certificate for a domain you control and point a Route 53 alias at the ALB — at the cost of requiring a registered domain to run the lab.
+Each `apply` creates a new load balancer with a new DNS name and therefore a new certificate, so this is repeated per deployment. To avoid it altogether, replace `04-eks/acm.tf` with a DNS-validated ACM certificate for a domain you control and point a Route 53 alias at the ALB — at the cost of requiring a registered domain to run the lab.
 
 ### Users and Groups
 
@@ -249,7 +261,7 @@ When the domain controller is provisioned, a set of sample **users** and **group
 | vscode-users     | 10007     | Access to the VS Code apps |
 | rstudio-users    | 10008     | Access to RStudio |
 
-All groups are Security / Universal, created in `CN=Users` of the `shinyproxy.mikecloud.com` domain (NetBIOS `SHINYPROXY`).
+All groups are Security / Universal, created in `CN=Users` of the `shinyproxyeks.mikecloud.com` domain (NetBIOS `SHINYPROXYEKS`).
 
 #### Users Created and Group Memberships
 
@@ -261,23 +273,29 @@ All groups are Security / Universal, created in `CN=Users` of the `shinyproxy.mi
 | akumar     | Amit Kumar         | 10004     | 10001     | india, rstudio-users | RStudio |
 | shinyproxy | ShinyProxy Service | 10050     | 10006     | service-accounts | None |
 
-The four test users get easy-to-type `<word>-<number>` passwords (for example `orange-481920`), stored in Secrets Manager as `<user>_ad_credentials_shinyproxy`; `./validate.sh` prints `jsmith`'s. The `shinyproxy` account is a directory-read service account with a random password in `shinyproxy_ldap_credentials`; it is in no app group, so it cannot start a session.
+The four test users get easy-to-type `<word>-<number>` passwords (for example `orange-481920`), stored in Secrets Manager as `<user>_ad_credentials_shinyproxy_eks`; `./validate.sh` prints `jsmith`'s. The `shinyproxy` account is a directory-read service account with a random password in `shinyproxy_eks_ldap_credentials`; it is in no app group, so it cannot start a session.
 
-To confirm a user resolves, open an SSM session to `efs-samba-gateway` and run `id <username>`. New users follow the usual ADUC plus `uidNumber`/`gidNumber` process; `06-utils/getNextUID.bat` returns the next free UID. A user without a `uidNumber` can sign in to ShinyProxy, but their session will refuse to start.
+To confirm a user resolves, open an SSM session to `efs-samba-gateway-eks` and run `id <username>`. New users follow the usual ADUC plus `uidNumber`/`gidNumber` process; `06-utils/getNextUID.bat` returns the next free UID. A user without a `uidNumber` can sign in to ShinyProxy, but their session will refuse to start.
 
 ### Troubleshooting
 
-| Where | What it holds |
-|-------|---------------|
-| CloudWatch `/ecs/shinyproxy/server` | ShinyProxy: sign-ins, LDAP errors, task launches |
-| CloudWatch `/ecs/shinyproxy/sp-vscode`, `sp-vscode-large`, `sp-rstudio` | Session start-up (`session-entrypoint:` and `directory-sync:` lines) and the app's own output |
+With `kubectl` pointed at the cluster (`aws eks update-kubeconfig --name shinyproxy-eks`; `apply.sh` does this when `kubectl` is installed):
 
-- **Every sign-in fails, even for valid users** — look in the ShinyProxy log for `LDAP: error code 49 ... data 52e`. That is the *service account's* bind being rejected, before the user's password is checked: the `shinyproxy` account is missing or its password does not match `shinyproxy_ldap_credentials`.
+| Command | What it shows |
+|---------|---------------|
+| `kubectl -n shinyproxy logs deploy/shinyproxy` | ShinyProxy: sign-ins, LDAP errors, pod launches |
+| `kubectl -n shinyproxy get pods -o wide` | ShinyProxy and every session pod (`sp-pod-<id>-0`), with the node each runs on |
+| `kubectl -n shinyproxy logs <sp-pod-...>` | Session start-up (`session-entrypoint:` and `directory-sync:` lines) and the app's own output |
+| `kubectl -n shinyproxy describe pod <sp-pod-...>` | Why a session is stuck: scheduling, image pull, EFS mount |
+| `kubectl get nodes,nodeclaims` | The nodes Auto Mode has launched and is launching |
+
+- **Every sign-in fails, even for valid users** — look in the ShinyProxy log for `LDAP: error code 49 ... data 52e`. That is the *service account's* bind being rejected, before the user's password is checked: the `shinyproxy` account is missing or its password does not match `shinyproxy_eks_ldap_credentials`. If the secret was rotated, re-run phase 5 to refresh the `ldap-bind` copy.
 - **A user signs in but sees no apps, or not the one they expect** — app tiles follow `access-groups`; check their membership in `vscode-users` / `rstudio-users` (`id <user>` on the gateway).
-- **A session never starts** — ShinyProxy waits up to five minutes for the task. In the ECS console, the cluster's stopped tasks show the reason (image pull, EFS mount, or the entrypoint exiting). An entrypoint failure is logged in the session log group, for example `<user> has no uidNumber`.
+- **A session never starts** — ShinyProxy waits up to five minutes for the pod. `describe pod` shows the cause: `Pending` while Auto Mode launches a node, `ImagePullBackOff`, a volume that will not mount, or the entrypoint exiting. An entrypoint failure is in the pod's log, for example `<user> has no uidNumber`.
+- **The ALB returns 502 or 503** — the ShinyProxy pod is not registered or not healthy. Check `kubectl -n shinyproxy get targetgroupbinding` and the target group's health in the EC2 console; ShinyProxy takes a couple of minutes to pass its first health check.
 - **RStudio shows a blank frame** — check that `www-frame-origin=same` is still set in [03-images/rstudio/session-entrypoint.sh](03-images/rstudio/session-entrypoint.sh); RStudio's default refuses to be framed.
 - **Session loads but VS Code spins with "handshake timed out"** — the WebSocket is not getting through. The ALB idle timeout is set to an hour; check that nothing between the browser and the ALB strips the `Upgrade` header.
-- **Everyone was signed out at once** — ShinyProxy restarted (a redeploy, or ECS replacing an unhealthy task). This is expected; see *Design Trade-offs*.
+- **Everyone was signed out at once** — ShinyProxy restarted (a redeploy, a failed liveness probe, or Auto Mode retiring its node). This is expected; see *Design Trade-offs*.
 
 Expected VS Code console noise that is **not** a fault:
 
@@ -297,4 +315,4 @@ When you are finished testing, remove all provisioned resources with:
 ./destroy.sh
 ```
 
-This stops any session tasks still running, removes the task definitions ShinyProxy registered, then destroys the ECS cluster and ALB, the ECR repositories and their images, EFS and the admin hosts, the Secrets Manager entries, and finally the domain controller and VPC.
+This destroys ShinyProxy and its namespace (taking any session pods still running with it), then the EKS cluster — Auto Mode terminates its nodes — and the ALB, the ECR repositories and their images, EFS and the admin hosts, the Secrets Manager entries, and finally the domain controller and VPC.

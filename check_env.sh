@@ -8,6 +8,7 @@
 #
 # Scope:
 #   - Checks for aws, terraform, jq and docker binaries.
+#   - Reports whether kubectl is present (optional: troubleshooting only).
 #   - Confirms the caller identity via AWS STS.
 #
 # Fast-Fail Behavior:
@@ -40,6 +41,14 @@ for cmd in "${commands[@]}"; do
 done
 
 echo "NOTE: All required commands are available."
+
+# Not needed to deploy - Terraform talks to the cluster itself - but it is
+# how you look at pods and logs afterwards.
+if command -v kubectl >/dev/null 2>&1; then
+  echo "NOTE: Found optional command: kubectl"
+else
+  echo "NOTE: Optional command not found: kubectl (needed only for troubleshooting)"
+fi
 
 # ------------------------------------------------------------------------------
 # AWS Connectivity Check

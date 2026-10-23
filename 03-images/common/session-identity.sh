@@ -13,9 +13,9 @@
 # Inputs (environment):
 #   SHINYPROXY_USERNAME  Set by ShinyProxy to the authenticated username.
 #   LDAP_URL             e.g. ldap://10.0.0.10:389
-#   LDAP_BASE_DN         e.g. DC=shinyproxy,DC=mikecloud,DC=com
+#   LDAP_BASE_DN         e.g. DC=shinyproxyeks,DC=mikecloud,DC=com
 #   LDAP_BIND_DN         Read-only service account DN.
-#   LDAP_BIND_PASSWORD   Injected by ECS from Secrets Manager.
+#   LDAP_BIND_PASSWORD   From the ldap-bind Kubernetes secret (secretKeyRef).
 #
 # Sets for the caller:
 #   USERNAME USER_UID USER_GID HOME_DIR, and run_as_user, log, die.

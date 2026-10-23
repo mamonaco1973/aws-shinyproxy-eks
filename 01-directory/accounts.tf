@@ -44,7 +44,7 @@ resource "random_password" "admin_password" {
 
 # Create AWS Secrets Manager container for Administrator credentials.
 resource "aws_secretsmanager_secret" "admin_secret" {
-  name        = "admin_ad_credentials_shinyproxy"
+  name        = "admin_ad_credentials_shinyproxy_eks"
   description = "Active Directory Administrator credentials"
 
   lifecycle {
@@ -109,7 +109,7 @@ locals {
 
 # Create Secrets Manager container for user credentials.
 resource "aws_secretsmanager_secret" "jsmith_secret" {
-  name        = "jsmith_ad_credentials_shinyproxy"
+  name        = "jsmith_ad_credentials_shinyproxy_eks"
   description = "John Smith AD credentials"
 
   lifecycle {
@@ -134,7 +134,7 @@ resource "aws_secretsmanager_secret_version" "jsmith_secret_version" {
 
 # Create Secrets Manager container for user credentials.
 resource "aws_secretsmanager_secret" "edavis_secret" {
-  name        = "edavis_ad_credentials_shinyproxy"
+  name        = "edavis_ad_credentials_shinyproxy_eks"
   description = "Emily Davis AD credentials"
 
   lifecycle {
@@ -159,7 +159,7 @@ resource "aws_secretsmanager_secret_version" "edavis_secret_version" {
 
 # Create Secrets Manager container for user credentials.
 resource "aws_secretsmanager_secret" "rpatel_secret" {
-  name        = "rpatel_ad_credentials_shinyproxy"
+  name        = "rpatel_ad_credentials_shinyproxy_eks"
   description = "Raj Patel AD credentials"
 
   lifecycle {
@@ -184,7 +184,7 @@ resource "aws_secretsmanager_secret_version" "rpatel_secret_version" {
 
 # Create Secrets Manager container for user credentials.
 resource "aws_secretsmanager_secret" "akumar_secret" {
-  name        = "akumar_ad_credentials_shinyproxy"
+  name        = "akumar_ad_credentials_shinyproxy_eks"
   description = "Amit Kumar AD credentials"
 
   lifecycle {
@@ -233,7 +233,7 @@ resource "random_password" "shinyproxy_password" {
 
 # Create Secrets Manager container for the service account credentials.
 resource "aws_secretsmanager_secret" "shinyproxy_secret" {
-  name        = "shinyproxy_ldap_credentials"
+  name        = "shinyproxy_eks_ldap_credentials"
   description = "ShinyProxy LDAP service account credentials"
 
   lifecycle {

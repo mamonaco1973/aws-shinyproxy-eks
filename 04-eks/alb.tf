@@ -4,19 +4,25 @@
 #
 # Purpose:
 #   Public HTTPS entry point. Terminates TLS and forwards to the single
-#   ShinyProxy task, which in turn proxies to each user's session task.
+#   ShinyProxy pod, which in turn proxies to each user's session pod.
 #
 # Design Notes:
-#   - target_type = "ip" because Fargate tasks register by ENI address.
+#   - The ALB and its target group belong to Terraform, not to a Kubernetes
+#     Ingress, so the self-signed certificate (acm.tf) can be issued for the
+#     ALB's DNS name before anything runs in the cluster. Phase 05 binds the
+#     target group to the ShinyProxy Service with a TargetGroupBinding, and
+#     Auto Mode's load balancer controller keeps the pod's IP registered.
+#   - target_type = "ip": pods register by their VPC address, so traffic
+#     goes straight to the pod rather than through a node port.
 #   - idle_timeout is raised to an hour: the editor rides on one long-lived
 #     WebSocket, and the 60 s default drops it whenever the user pauses.
-#   - No stickiness. There is one ShinyProxy task, and a session's identity
+#   - No stickiness. There is one ShinyProxy pod, and a session's identity
 #     lives in ShinyProxy's session cookie, not in which target served it.
 #
 # ================================================================================
 
 resource "aws_lb" "shinyproxy_alb" {
-  name               = "shinyproxy-alb"
+  name               = "shinyproxy-eks-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_sg.id]
@@ -28,8 +34,9 @@ resource "aws_lb" "shinyproxy_alb" {
   ]
 }
 
+# Phase 05 looks the target group up by this name.
 resource "aws_lb_target_group" "shinyproxy_tg" {
-  name        = "shinyproxy-tg"
+  name        = "shinyproxy-eks-tg"
   port        = 8080
   protocol    = "HTTP"
   target_type = "ip"

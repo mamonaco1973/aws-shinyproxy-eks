@@ -27,7 +27,7 @@
 
 # Provision Ubuntu-based AD Domain Controller using reusable module.
 module "mini_ad" {
-  source            = "github.com/mamonaco1973/module-aws-mini-ad?ref=sentinel"
+  source            = "github.com/mamonaco1973/module-aws-mini-ad"
   netbios           = var.netbios
   vpc_id            = aws_vpc.ad-vpc.id
   realm             = var.realm

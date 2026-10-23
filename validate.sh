@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================================================
-# validate.sh - Active Directory + VS Code on ShinyProxy Validation
+# validate.sh - Active Directory + ShinyProxy on EKS Validation
 # ==============================================================================
 # Purpose:
 #   Validates the deployed AWS lab environment by retrieving:
@@ -11,9 +11,9 @@
 # Notes:
 #   - Requires AWS CLI configured with appropriate permissions.
 #   - Instances must be tagged correctly:
-#       Name = windows-ad-admin
-#       Name = efs-samba-gateway
-#   - ALB must exist with name "shinyproxy-alb"
+#       Name = windows-ad-admin-eks
+#       Name = efs-samba-gateway-eks
+#   - ALB must exist with name "shinyproxy-eks-alb"
 # ==============================================================================
 
 set -euo pipefail
@@ -25,7 +25,7 @@ export AWS_DEFAULT_REGION="us-east-1"
 
 echo ""
 echo "============================================================================"
-echo "VS Code on ShinyProxy - Validation Output"
+echo "ShinyProxy on EKS - Validation Output"
 echo "============================================================================"
 echo ""
 
@@ -33,7 +33,7 @@ echo ""
 # Lookup Windows AD Admin Instance (Public DNS)
 # ------------------------------------------------------------------------------
 windows_dns="$(aws ec2 describe-instances \
-  --filters "Name=tag:Name,Values=windows-ad-admin" \
+  --filters "Name=tag:Name,Values=windows-ad-admin-eks" \
   --query 'Reservations[].Instances[].PublicDnsName' \
   --output text | xargs)"
 
@@ -41,12 +41,12 @@ windows_dns="$(aws ec2 describe-instances \
 # Lookup Linux EFS Gateway Instance (Public DNS / Public IP)
 # ------------------------------------------------------------------------------
 linux_dns="$(aws ec2 describe-instances \
-  --filters "Name=tag:Name,Values=efs-samba-gateway" \
+  --filters "Name=tag:Name,Values=efs-samba-gateway-eks" \
   --query 'Reservations[].Instances[].PublicDnsName' \
   --output text | xargs)"
 
 linux_ip="$(aws ec2 describe-instances \
-  --filters "Name=tag:Name,Values=efs-samba-gateway" \
+  --filters "Name=tag:Name,Values=efs-samba-gateway-eks" \
   --query 'Reservations[].Instances[].PublicIpAddress' \
   --output text | xargs)"
 
@@ -56,7 +56,7 @@ linux_ip="$(aws ec2 describe-instances \
 # describe-load-balancers --names errors (rather than returning empty) when
 # the ALB does not exist; let the "not found" branch below report it.
 alb_dns="$(aws elbv2 describe-load-balancers \
-  --names shinyproxy-alb \
+  --names shinyproxy-eks-alb \
   --query 'LoadBalancers[0].DNSName' \
   --output text 2>/dev/null | xargs || true)"
 
@@ -74,7 +74,7 @@ print_line() {
 # Windows
 if [ -z "${windows_dns}" ] || [ "${windows_dns}" = "None" ]; then
   print_line "Windows RDP Host FQDN" \
-    "WARNING: windows-ad-admin not found or no public DNS"
+    "WARNING: windows-ad-admin-eks not found or no public DNS"
 else
   print_line "Windows RDP Host FQDN" "${windows_dns}"
 fi
@@ -89,7 +89,7 @@ fi
 
 if [ -z "${linux_value}" ]; then
   print_line "Linux Gateway Public" \
-    "WARNING: efs-samba-gateway not found or no public IP/DNS"
+    "WARNING: efs-samba-gateway-eks not found or no public IP/DNS"
 else
   print_line "Linux Gateway Public" "${linux_value}"
 fi
@@ -97,7 +97,7 @@ fi
 # ALB
 if [ -z "${alb_dns}" ] || [ "${alb_dns}" = "None" ]; then
   print_line "ShinyProxy ALB Endpoint" \
-    "WARNING: shinyproxy-alb not found"
+    "WARNING: shinyproxy-eks-alb not found"
 else
   print_line "ShinyProxy URL" "https://${alb_dns}"
 
@@ -122,15 +122,15 @@ fi
 # Test User Credentials
 # ------------------------------------------------------------------------------
 # Lab convenience: prints a real password to the terminal. The secret stores
-# the down-level name (SHINYPROXY\jsmith); ShinyProxy expects the bare username.
+# the down-level name (SHINYPROXYEKS\jsmith); ShinyProxy expects the bare username.
 jsmith_secret="$(aws secretsmanager get-secret-value \
-  --secret-id jsmith_ad_credentials_shinyproxy \
+  --secret-id jsmith_ad_credentials_shinyproxy_eks \
   --query SecretString \
   --output text 2>/dev/null || true)"
 
 if [ -z "${jsmith_secret}" ]; then
   print_line "jsmith Credentials" \
-    "WARNING: jsmith_ad_credentials_shinyproxy not found"
+    "WARNING: jsmith_ad_credentials_shinyproxy_eks not found"
 else
   print_line "jsmith Username" \
     "$(echo "${jsmith_secret}" | jq -r '.username' | sed 's/.*\\//')"
@@ -140,7 +140,7 @@ fi
 
 echo ""
 echo "NOTE: Sign in with an AD account (e.g. jsmith or rpatel)."
-echo "NOTE: Passwords are stored in Secrets Manager as <user>_ad_credentials_shinyproxy."
+echo "NOTE: Passwords are stored in Secrets Manager as <user>_ad_credentials_shinyproxy_eks."
 echo ""
 echo "NOTE: The ALB uses a self-signed certificate. Browsers will warn once —"
 echo "      choose Advanced then Proceed. This is expected."

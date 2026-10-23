@@ -4,25 +4,29 @@
 # ================================================================================
 #
 # Purpose:
-#   Orchestrate a four-phase deployment of the ShinyProxy app platform lab.
+#   Orchestrate a five-phase deployment of the ShinyProxy app platform lab
+#   on EKS.
 #
 # Deployment Flow:
 #     1. Deploy AD Domain Controller and VPC (Terraform).
 #     2. Deploy EFS and domain-joined admin hosts (Terraform).
 #     3. Create ECR repositories, then build and push the app session images
 #        (VS Code, RStudio) and the ShinyProxy image (Terraform + Docker).
-#     4. Deploy the ECS cluster, ShinyProxy service and ALB (Terraform).
+#     4. Deploy the EKS Auto Mode cluster, EFS CSI driver and ALB (Terraform).
+#     5. Deploy ShinyProxy into the cluster and bind it to the ALB
+#        (Terraform, Kubernetes provider).
 #
 # Design Principles:
 #   - Strict sequencing to ensure AD is available before dependencies.
 #   - Fail-fast behavior using set -euo pipefail.
 #   - Images are tagged with a hash of their build context, so a changed
-#     image always produces a changed task definition and a redeploy, and
-#     an unchanged one never does.
+#     image always produces a changed Deployment and a ShinyProxy restart,
+#     and an unchanged one never does.
 #
 # Requirements:
 #   - AWS CLI configured with sufficient IAM permissions.
-#   - Terraform and Docker installed and in PATH.
+#   - Terraform and Docker installed and in PATH. kubectl is optional; if
+#     present, its kubeconfig is pointed at the new cluster.
 #   - check_env.sh and validate.sh present in working directory.
 #
 # Exit Codes:
@@ -118,18 +122,35 @@ cd ..
 
 
 # ================================================================================
-# PHASE 4: ECS Cluster and ShinyProxy
+# PHASE 4: EKS Cluster and ALB
 # ================================================================================
 
-echo "NOTE: Building ECS cluster and ShinyProxy service..."
+echo "NOTE: Building EKS cluster and load balancer..."
 
-cd 04-ecs
+cd 04-eks
+terraform init
+terraform apply -auto-approve
+cluster_name=$(terraform output -raw cluster_name)
+cd ..
+
+
+# ================================================================================
+# PHASE 5: ShinyProxy
+# ================================================================================
+
+# Terraform waits for the Deployment to roll out, which includes Auto Mode
+# launching the first node.
+echo "NOTE: Deploying ShinyProxy into the cluster..."
+
+cd 05-shinyproxy
 terraform init
 terraform apply -auto-approve -var "image_tag=${image_tag}"
-
-echo "NOTE: Waiting for the ShinyProxy service to stabilize..."
-aws ecs wait services-stable --cluster shinyproxy --services shinyproxy
 cd ..
+
+if command -v kubectl >/dev/null 2>&1; then
+  aws eks update-kubeconfig --name "$cluster_name" >/dev/null
+  echo "NOTE: kubectl context set to cluster ${cluster_name}."
+fi
 
 
 # ================================================================================

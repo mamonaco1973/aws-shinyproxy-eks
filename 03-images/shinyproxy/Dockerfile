@@ -6,7 +6,7 @@
 #
 # Note:
 #   application.yml holds no deployment-specific values - those are ${...}
-#   placeholders resolved from the ECS task environment - so this image only
+#   placeholders resolved from the ShinyProxy pod environment - so this image only
 #   needs rebuilding when the configuration itself changes.
 # ==============================================================================
 

@@ -99,7 +99,7 @@ resource "aws_acm_certificate" "alb" {
   }
 
   tags = {
-    Name = "shinyproxy-alb-self-signed"
+    Name = "shinyproxy-eks-alb-self-signed"
   }
 }
 

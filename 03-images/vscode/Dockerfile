@@ -3,7 +3,7 @@
 # ------------------------------------------------------------------------------
 # Purpose:
 #   - One container of this image is one user's VS Code session. ShinyProxy
-#     launches it as a Fargate task per signed-in user and proxies to :8080.
+#     launches it as a pod per signed-in user and proxies to :8080.
 #
 # Identity Model:
 #   - The container starts as root ONLY long enough for session-entrypoint.sh
@@ -25,7 +25,7 @@ USER root
 # ------------------------------------------------------------------------------
 # ldap-utils resolves POSIX attributes at start-up. The rest is a modest
 # developer toolset; extend it here rather than in a running session, since
-# anything installed into a session's root filesystem dies with the task.
+# anything installed into a session's root filesystem dies with the pod.
 #
 # No C/C++ toolchain (build-essential): it adds ~300 MB to every session
 # launch's image pull. Add it back here if sessions need to compile native

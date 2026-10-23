@@ -6,7 +6,7 @@ from inline SVG, so a `prefers-color-scheme` media query inside the document is
 silently dropped. The README pairs them with <picture>, which GitHub honours.
 
 A README diagram is studied, not narrated, so it is COMPLETE rather than
-minimal: the ECS control plane, the image registry, the secret store, the NAT
+minimal: the EKS control plane, the image registry, the secret store, the NAT
 gateway and the Samba gateway's view of EFS are all on it. The Windows admin
 host is the one omission -- it administers AD and plays no part in a session.
 
@@ -111,12 +111,12 @@ def gutter_x(c):
 # Layout
 # ------------------------------------------------------------------------------
 # The request path runs down the middle column: browser -> ALB -> ShinyProxy
-# -> the user's session task -> EFS. ShinyProxy and the session tasks are the
-# subject (amber) and share a dashed ECS-cluster boundary. Identity sits on
+# -> the user's session pod -> EFS. ShinyProxy and the session pods are the
+# subject (amber) and share a dashed EKS-cluster boundary. Identity sits on
 # the left (domain controller, and the Samba gateway joined to it); the AWS
-# services ECS leans on stack down the right: Secrets Manager injects the
-# bind password, ECR supplies both images, the NAT gateway carries outbound
-# traffic from the private tasks.
+# services EKS leans on stack down the right: Secrets Manager holds the bind
+# password copied into a Kubernetes secret, ECR supplies the images, the NAT
+# gateway carries outbound traffic from the private pods.
 #
 # id: (x, y, colour key, icon, title, subtitle)
 NODES.update({
@@ -128,19 +128,19 @@ NODES.update({
     "dc":       (COL[0], ROW[1], "purple", "users", "mini-AD (Samba DC)",
                  "users, groups, uid/gid, DNS"),
     "sp":       (COL[1], ROW[1], "amber", "shield", "ShinyProxy",
-                 "ECS service, 1 task: login + proxy"),
-    "ecs":      (COL[2], ROW[1], "blue", "layers", "ECS / Fargate",
-                 "runs a task definition per session"),
+                 "Deployment, 1 pod: login + proxy"),
+    "ecs":      (COL[2], ROW[1], "blue", "layers", "EKS Auto Mode",
+                 "API server, nodes on demand"),
     "gateway":  (COL[0], ROW[2], "navy", "server", "Samba Gateway",
                  "domain-joined EC2, SMB view of EFS"),
     "sessions": (COL[1], ROW[2], "amber", "code", "App Sessions",
-                 "VS Code or RStudio, 1 task per user"),
+                 "VS Code or RStudio, 1 pod per user"),
     "ecr":      (COL[2], ROW[2], "store", "package", "ECR",
                  "VS Code, RStudio, ShinyProxy"),
     "efs":      (COL[1], ROW[3], "store", "folder", "EFS",
                  "/home and /efs, shared"),
     "nat":      (COL[2], ROW[3], "navy", "network", "NAT Gateway",
-                 "outbound for the private tasks"),
+                 "outbound for the private pods"),
 })
 
 alb, brw, sec = _r("alb"), _r("browser"), _r("secrets")
@@ -154,25 +154,25 @@ EDGES = {
     "e_https":  (f"M{brw[2]},{brw[5]} L{alb[0] - 5},{alb[5]}", "line",
                  "HTTPS :443", gutter_x(0), brw[5] - 12, "middle"),
     "e_alb":    (f"M{alb[4]},{alb[3]} L{alb[4]},{sp[1] - 5}", "line",
-                 "HTTP :8080", alb[4] - 16, (alb[3] + sp[1]) / 2 + 6, "end"),
+                 "HTTP :8080 to pod IP", alb[4] - 16, (alb[3] + sp[1]) / 2 + 6, "end"),
     "e_signin": (f"M{sp[0]},{sp[5] - OFF} L{dc[2] + 5},{dc[5] - OFF}", "purple",
                  "LDAP sign-in", gutter_x(0), sp[5] - OFF - 12, "middle"),
     "e_run":    (f"M{sp[2]},{sp[5] - OFF} L{ecs[0] - 5},{ecs[5] - OFF}", "blue",
-                 "RunTask / StopTask", gutter_x(1), sp[5] - OFF - 12, "middle"),
+                 "create / delete pod", gutter_x(1), sp[5] - OFF - 12, "middle"),
     "e_secret": (f"M{sec[4]},{sec[3]} L{sec[4]},{ecs[1] - 5}", "store",
-                 "bind password", sec[4] + 14, (sec[3] + ecs[1]) / 2 + 6, "start"),
+                 "bind password secret", sec[4] + 14, (sec[3] + ecs[1]) / 2 + 6, "start"),
     "e_ecr":    (f"M{ecr[4]},{ecr[1]} L{ecr[4]},{ecs[3] + 5}", "store",
                  "image pulls", ecr[4] + 14, (ecs[3] + ecr[1]) / 2 + 6, "start"),
     "e_launch": (f"M{ecs[0]},{ecs[5] + OFF} H{gutter_x(1)} V{ss[5] - OFF} "
                  f"H{ss[2] + 5}", "blue",
-                 "launches", gutter_x(1) + 12, (ecs[5] + ss[5]) / 2 + 6, "start"),
+                 "schedules", gutter_x(1) + 12, (ecs[5] + ss[5]) / 2 + 6, "start"),
     "e_proxy":  (f"M{sp[4]},{sp[3]} L{sp[4]},{ss[1] - 5}", "amber",
                  "HTTP + WebSocket", sp[4] - 16, (sp[3] + ss[1]) / 2 + 6, "end"),
     "e_uid":    (f"M{ss[0]},{ss[5] - OFF} H{gutter_x(0)} V{dc[5] + OFF} "
                  f"H{dc[2] + 5}", "purple",
                  "LDAP uid/gid", gutter_x(0) - 12, (dc[5] + ss[5]) / 2 + 6, "end"),
     "e_nfs":    (f"M{ss[4]},{ss[3]} L{ss[4]},{efs[1] - 5}", "store",
-                 "NFS (TLS)", ss[4] + 14, (ss[3] + efs[1]) / 2 + 6, "start"),
+                 "NFS (TLS), EFS CSI", ss[4] + 14, (ss[3] + efs[1]) / 2 + 6, "start"),
     "e_nat":    (f"M{ss[2]},{ss[5] + OFF} H{gutter_x(1)} V{nat[5]} H{nat[0] - 5}",
                  "navy", "Open VSX, CRAN", gutter_x(1) + 12, (ss[5] + nat[5]) / 2 + 20,
                  "start"),
@@ -182,19 +182,21 @@ EDGES = {
                  "domain member", gw[4] + 14, (dc[3] + gw[1]) / 2 + 6, "start"),
 }
 
-# The ECS cluster: ShinyProxy and every session task run inside it.
+# The EKS cluster: ShinyProxy and every session pod run inside it.
 PAD = 18
 CLUSTER = (sp[0] - PAD, sp[1] - PAD, NW + PAD * 2, ss[3] - sp[1] + PAD * 2)
-CLUSTER_LABEL = "ECS cluster (Fargate)"
+CLUSTER_LABEL = "EKS cluster (Auto Mode)"
 
 ALT = ("A browser reaches an internet-facing load balancer over HTTPS; it forwards "
-       "to ShinyProxy, an ECS service, which signs users in against the mini-AD "
-       "domain controller over LDAP, then calls ECS RunTask to launch a dedicated "
-       "Fargate task running the chosen app, VS Code or RStudio, for each user "
-       "and proxies HTTP and WebSocket traffic to it. ECS pulls the images from ECR and injects the "
-       "LDAP bind password from Secrets Manager. Each session task resolves the "
-       "user's uid and gid over LDAP, mounts the shared EFS file system for "
-       "/home and /efs, and reaches Open VSX and package mirrors through a NAT "
+       "to ShinyProxy, a single pod in an EKS Auto Mode cluster, which signs users "
+       "in against the mini-AD domain controller over LDAP, then asks the "
+       "Kubernetes API to create a dedicated pod running the chosen app, VS Code "
+       "or RStudio, for each user and proxies HTTP and WebSocket traffic to it. "
+       "Auto Mode launches nodes on demand to run the pods and pulls the images "
+       "from ECR; the LDAP bind password comes from Secrets Manager by way of a "
+       "Kubernetes secret. Each session pod resolves the user's uid and gid over "
+       "LDAP, mounts the shared EFS file system for /home and /efs through the "
+       "EFS CSI driver, and reaches Open VSX and package mirrors through a NAT "
        "gateway. A domain-joined Samba gateway mounts the same EFS file system "
        "and shares it over SMB.")
 

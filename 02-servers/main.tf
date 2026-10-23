@@ -34,7 +34,7 @@ provider "aws" {
 # Retrieve Secrets Manager secret metadata for AD admin credential access.
 # Note: Reading secret value requires aws_secretsmanager_secret_version.
 data "aws_secretsmanager_secret" "admin_secret" {
-  name = "admin_ad_credentials_shinyproxy"
+  name = "admin_ad_credentials_shinyproxy_eks"
 }
 
 

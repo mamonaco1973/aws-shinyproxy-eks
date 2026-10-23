@@ -3,7 +3,7 @@
 # ------------------------------------------------------------------------------
 # Purpose:
 #   - One container of this image is one user's RStudio session. ShinyProxy
-#     launches it as a Fargate task per signed-in user and proxies to :8787.
+#     launches it as a pod per signed-in user and proxies to :8787.
 #
 # Identity Model:
 #   - Same as the VS Code image: the entrypoint starts as root, becomes the

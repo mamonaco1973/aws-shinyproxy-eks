@@ -25,11 +25,11 @@
 # ================================================================================
 
 # Fully Qualified Domain Name used for AD DNS namespace.
-# Example: shinyproxy.mikecloud.com
+# Example: shinyproxyeks.mikecloud.com
 variable "dns_zone" {
   description = "Active Directory DNS zone (FQDN)"
   type        = string
-  default     = "shinyproxy.mikecloud.com"
+  default     = "shinyproxyeks.mikecloud.com"
 }
 
 
@@ -38,11 +38,11 @@ variable "dns_zone" {
 # ================================================================================
 
 # Kerberos realm value. Conventionally matches dns_zone in uppercase.
-# Example: SHINYPROXY.MIKECLOUD.COM
+# Example: SHINYPROXYEKS.MIKECLOUD.COM
 variable "realm" {
   description = "Kerberos realm (uppercase DNS zone)"
   type        = string
-  default     = "SHINYPROXY.MIKECLOUD.COM"
+  default     = "SHINYPROXYEKS.MIKECLOUD.COM"
 }
 
 
@@ -52,11 +52,11 @@ variable "realm" {
 
 # Legacy NetBIOS-compatible short domain name.
 # Typically uppercase, alphanumeric, <= 15 characters.
-# Example: SHINYPROXY
+# Example: SHINYPROXYEKS
 variable "netbios" {
   description = "NetBIOS short domain name"
   type        = string
-  default     = "SHINYPROXY"
+  default     = "SHINYPROXYEKS"
 }
 
 
@@ -66,11 +66,11 @@ variable "netbios" {
 
 # Distinguished Name under which user accounts will be created.
 # Must correspond to DNS domain components.
-# Example: CN=Users,DC=shinyproxy,DC=mikecloud,DC=com
+# Example: CN=Users,DC=shinyproxyeks,DC=mikecloud,DC=com
 variable "user_base_dn" {
   description = "LDAP user base distinguished name"
   type        = string
-  default     = "CN=Users,DC=shinyproxy,DC=mikecloud,DC=com"
+  default     = "CN=Users,DC=shinyproxyeks,DC=mikecloud,DC=com"
 }
 
 
@@ -82,5 +82,5 @@ variable "user_base_dn" {
 variable "vpc_name" {
   description = "Name for the VPC resource"
   type        = string
-  default     = "shinyproxy-vpc"
+  default     = "shinyproxy-eks-vpc"
 }

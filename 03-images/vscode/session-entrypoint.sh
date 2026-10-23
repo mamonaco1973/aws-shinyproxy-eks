@@ -3,7 +3,7 @@
 # session-entrypoint.sh - Become the AD User, Then Start code-server
 # ------------------------------------------------------------------------------
 # Purpose:
-#   - Runs as root inside the session task. session-identity.sh (shared
+#   - Runs as root inside the session pod. session-identity.sh (shared
 #     with the other app images) becomes the AD user; this script prepares
 #     the editor state and execs code-server under that identity.
 #
@@ -13,7 +13,7 @@
 #   - code-server state is split. Settings, keybindings, snippets and
 #     extensions live on EFS so they follow the user between sessions. The
 #     SQLite stores (globalStorage, workspaceStorage) are symlinked onto the
-#     task's local disk - SQLite over NFS is the classic corruption case -
+#     pod's local disk - SQLite over NFS is the classic corruption case -
 #     so editor layout and recent-files history reset with each session.
 # ==============================================================================
 
@@ -52,7 +52,7 @@ fi
 # ------------------------------------------------------------------------------
 # Start code-server as the user
 # ------------------------------------------------------------------------------
-# --auth none is safe only because the task's security group admits port
+# --auth none is safe only because the session network policy admits port
 # 8080 from ShinyProxy alone. ShinyProxy is the only path in.
 log "starting code-server for $USERNAME"
 cd "$HOME_DIR"

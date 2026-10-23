@@ -87,7 +87,7 @@ resource "aws_instance" "efs_gateway_instance" {
   # Executes initialization script with environment-specific parameters.
   # Script performs AD join, EFS mount, and Samba configuration.
   user_data = templatefile("./scripts/userdata.sh", {
-    admin_secret   = "admin_ad_credentials_shinyproxy"
+    admin_secret   = "admin_ad_credentials_shinyproxy_eks"
     domain_fqdn    = var.dns_zone
     efs_mnt_server = aws_efs_mount_target.efs_mnt_1.dns_name
     netbios        = var.netbios
@@ -100,7 +100,7 @@ resource "aws_instance" "efs_gateway_instance" {
   # --------------------------------------------------------------------------
   # Standard resource identification and cost allocation tagging.
   tags = {
-    Name = "efs-samba-gateway"
+    Name = "efs-samba-gateway-eks"
   }
 
   # --------------------------------------------------------------------------

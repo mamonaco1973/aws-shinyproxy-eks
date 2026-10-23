@@ -3,13 +3,15 @@
 # ------------------------------------------------------------------------------
 # Purpose:
 #   - Authenticate users against the mini-AD domain over LDAP.
-#   - Launch one VS Code session per user as an ECS Fargate task.
-#   - Proxy the browser (HTTP + WebSocket) to that task's private IP.
+#   - Launch one pod per user session in the EKS cluster.
+#   - Proxy the browser (HTTP + WebSocket) to that pod's IP.
 #
 # Configuration Model:
 #   This file is baked into the image and is identical for every deployment.
 #   Everything environment-specific arrives as ${...} placeholders, which
-#   Spring resolves from the ShinyProxy task's environment (see 04-ecs).
+#   Spring resolves from the ShinyProxy pod's environment (see 05-shinyproxy).
+#   The Kubernetes object names below (the "efs" claim, the "ldap-bind"
+#   secret) are fixed by 05-shinyproxy.
 # ==============================================================================
 
 server:
@@ -40,13 +42,10 @@ proxy:
   # ----------------------------------------------------------------------------
   # The ShinyProxy page sends heartbeats while the tab is open. A session is
   # reclaimed 30 minutes after the last one (tab closed, laptop asleep), and
-  # in any case after 12 hours, so no task runs forever.
+  # in any case after 12 hours, so no session pod runs forever.
   heartbeat-rate: 10000
   heartbeat-timeout: 1800000
   default-proxy-max-lifetime: 720
-
-  # A cold Fargate start pulls a ~1 GB image; give it time.
-  container-wait-time: 300000
 
   # app-admins see every running session under /admin.
   admin-groups: app-admins
@@ -69,17 +68,19 @@ proxy:
     manager-password: ${LDAP_BIND_PASSWORD}
 
   # ----------------------------------------------------------------------------
-  # Container backend - ECS Fargate
+  # Container backend - Kubernetes (EKS Auto Mode)
   # ----------------------------------------------------------------------------
-  container-backend: ecs
-  ecs:
-    name: ${ECS_CLUSTER}
-    region: ${AWS_REGION}
-    subnets: ${SESSION_SUBNETS}
-    security-groups: ${SESSION_SECURITY_GROUPS}
-    service-wait-time: 300000
-    enable-cloud-watch: true
-    cloud-watch-group-prefix: /ecs/shinyproxy/
+  # ShinyProxy runs inside the cluster, so it uses its service account and
+  # reaches session pods directly on their pod IPs (internal-networking).
+  # A session that needs a new node waits for Auto Mode to launch one and
+  # pull a ~1 GB image; give it five minutes.
+  container-backend: kubernetes
+  kubernetes:
+    internal-networking: true
+    namespace: ${SESSION_NAMESPACE}
+    image-pull-policy: IfNotPresent
+    node-selector: kubernetes.io/arch=amd64
+    pod-wait-time: 300000
 
   # ----------------------------------------------------------------------------
   # Apps
@@ -87,60 +88,78 @@ proxy:
   # Each spec is one tile on the landing page. access-groups decides who sees
   # it: vscode-users get the two VS Code sizes, rstudio-users get RStudio.
   # Each user may run one session of each app.
+  #
+  # Requests equal limits, so every session gets guaranteed CPU and memory.
+  #
+  # The pod patches, shared by every spec:
+  #   - mount the EFS claim at /home (its home/ directory) and /efs (its root);
+  #     ShinyProxy's own container-volumes would be hostPath volumes
+  #   - keep the namespace's service account token out of the pod, so the
+  #     user has no credentials for the Kubernetes API
+  #   - stop Auto Mode from evicting a live session to consolidate nodes
+  #
+  # LDAP_BIND_PASSWORD is a secretKeyRef: ShinyProxy puts a reference to the
+  # ldap-bind secret in the pod spec, never the value.
   specs:
     - id: vscode
       display-name: VS Code
       description: 1 vCPU, 4 GB memory
       access-groups: vscode-users
-      ecs-execution-role: ${SESSION_EXECUTION_ROLE_ARN}
-      ecs-efs-volumes: &efs-volumes
-        - name: home
-          file-system-id: ${EFS_ID}
-          root-directory: /home
-          transit-encryption: true
-        - name: efs
-          file-system-id: ${EFS_ID}
-          root-directory: /
-          transit-encryption: true
-      ecs-managed-secrets: &ldap-secret
-        - name: LDAP_BIND_PASSWORD
-          value-from: "${LDAP_SECRET_ARN}:password::"
       container-image: ${VSCODE_IMAGE}
-      container-cpu-request: 1024
-      container-memory-request: 4096
-      container-volumes: &volumes
-        - home:/home
-        - efs:/efs
+      container-cpu-request: 1
+      container-cpu-limit: 1
+      container-memory-request: 4Gi
+      container-memory-limit: 4Gi
       container-env: &session-env
         LDAP_URL: ${LDAP_URL}
         LDAP_BASE_DN: ${LDAP_BASE_DN}
         LDAP_BIND_DN: ${LDAP_BIND_DN}
+        LDAP_BIND_PASSWORD: secretKeyRef:ldap-bind:password
+      kubernetes-pod-patches: &session-patches |
+        - op: add
+          path: /spec/volumes
+          value:
+            - name: efs
+              persistentVolumeClaim:
+                claimName: efs
+        - op: add
+          path: /spec/containers/0/volumeMounts
+          value:
+            - name: efs
+              mountPath: /home
+              subPath: home
+            - name: efs
+              mountPath: /efs
+        - op: add
+          path: /spec/automountServiceAccountToken
+          value: false
+        - op: add
+          path: /metadata/annotations/karpenter.sh~1do-not-disrupt
+          value: "true"
       port: 8080
 
     - id: vscode-large
       display-name: VS Code (large)
       description: 4 vCPU, 16 GB memory
       access-groups: vscode-users
-      ecs-execution-role: ${SESSION_EXECUTION_ROLE_ARN}
-      ecs-efs-volumes: *efs-volumes
-      ecs-managed-secrets: *ldap-secret
       container-image: ${VSCODE_IMAGE}
-      container-cpu-request: 4096
-      container-memory-request: 16384
-      container-volumes: *volumes
+      container-cpu-request: 4
+      container-cpu-limit: 4
+      container-memory-request: 16Gi
+      container-memory-limit: 16Gi
       container-env: *session-env
+      kubernetes-pod-patches: *session-patches
       port: 8080
 
     - id: rstudio
       display-name: RStudio
       description: 2 vCPU, 8 GB memory
       access-groups: rstudio-users
-      ecs-execution-role: ${SESSION_EXECUTION_ROLE_ARN}
-      ecs-efs-volumes: *efs-volumes
-      ecs-managed-secrets: *ldap-secret
       container-image: ${RSTUDIO_IMAGE}
-      container-cpu-request: 2048
-      container-memory-request: 8192
-      container-volumes: *volumes
+      container-cpu-request: 2
+      container-cpu-limit: 2
+      container-memory-request: 8Gi
+      container-memory-limit: 8Gi
       container-env: *session-env
+      kubernetes-pod-patches: *session-patches
       port: 8787

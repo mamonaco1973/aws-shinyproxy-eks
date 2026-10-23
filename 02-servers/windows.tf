@@ -70,7 +70,7 @@ resource "aws_instance" "windows_ad_instance" {
   #   - Integration with Samba/EFS gateway
   #   - RDP group configuration
   user_data = templatefile("./scripts/userdata.ps1", {
-    admin_secret = "admin_ad_credentials_shinyproxy"
+    admin_secret = "admin_ad_credentials_shinyproxy_eks"
     domain_fqdn  = var.dns_zone
     samba_server = aws_instance.efs_gateway_instance.private_dns
     rdp_group    = "shinyproxy-users"
@@ -82,7 +82,7 @@ resource "aws_instance" "windows_ad_instance" {
   # --------------------------------------------------------------------------
   # Resource identification and cost allocation metadata.
   tags = {
-    Name = "windows-ad-admin"
+    Name = "windows-ad-admin-eks"
   }
 
   # --------------------------------------------------------------------------

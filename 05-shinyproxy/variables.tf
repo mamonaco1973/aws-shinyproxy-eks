@@ -3,51 +3,21 @@
 # ================================================================================
 #
 # Purpose:
-#   Define input variables for Active Directory naming and supporting VPC
-#   resource identification.
-#
-# Naming Model:
-#   - dns_zone : Fully Qualified Domain Name for AD DNS namespace.
-#   - realm    : Kerberos realm (uppercase dns_zone).
-#   - netbios  : Short legacy domain name (<= 15 characters).
-#
-# Notes:
-#   - realm should equal upper(dns_zone) for Kerberos compatibility.
-#   - netbios should be uppercase and avoid special characters.
+#   Define input variables for Active Directory naming, LDAP lookups, the
+#   cluster to deploy into and the image tag to run.
 #
 # ================================================================================
-
-
-# ================================================================================
-# SECTION: Active Directory DNS Zone (FQDN)
-# ================================================================================
-
-variable "dns_zone" {
-  description = "Active Directory DNS zone (FQDN)"
-  type        = string
-  default     = "shinyproxy.mikecloud.com"
-}
-
-
-# ================================================================================
-# SECTION: Kerberos Realm
-# ================================================================================
-
-variable "realm" {
-  description = "Kerberos realm (uppercase DNS zone)"
-  type        = string
-  default     = "SHINYPROXY.MIKECLOUD.COM"
-}
 
 
 # ================================================================================
 # SECTION: NetBIOS Short Domain Name
 # ================================================================================
 
+# Used only to find the domain controller instance by its Name tag.
 variable "netbios" {
   description = "NetBIOS short domain name"
   type        = string
-  default     = "SHINYPROXY"
+  default     = "SHINYPROXYEKS"
 }
 
 
@@ -58,7 +28,18 @@ variable "netbios" {
 variable "vpc_name" {
   description = "Name for the VPC resource"
   type        = string
-  default     = "shinyproxy-vpc"
+  default     = "shinyproxy-eks-vpc"
+}
+
+
+# ================================================================================
+# SECTION: Cluster
+# ================================================================================
+
+variable "cluster_name" {
+  description = "Name of the EKS cluster built by phase 04"
+  type        = string
+  default     = "shinyproxy-eks"
 }
 
 
@@ -70,14 +51,14 @@ variable "vpc_name" {
 variable "base_dn" {
   description = "LDAP base distinguished name of the domain"
   type        = string
-  default     = "DC=shinyproxy,DC=mikecloud,DC=com"
+  default     = "DC=shinyproxyeks,DC=mikecloud,DC=com"
 }
 
 # Container under which the mini-AD module creates users and groups.
 variable "user_base_dn" {
   description = "LDAP user base distinguished name"
   type        = string
-  default     = "CN=Users,DC=shinyproxy,DC=mikecloud,DC=com"
+  default     = "CN=Users,DC=shinyproxyeks,DC=mikecloud,DC=com"
 }
 
 
@@ -85,8 +66,8 @@ variable "user_base_dn" {
 # SECTION: Image Tag
 # ================================================================================
 
-# Tag apply.sh pushes both images under. Changing it rolls the ShinyProxy
-# service and points new sessions at the new session image.
+# Tag apply.sh pushes every image under. Changing it restarts ShinyProxy
+# and points new sessions at the new session images.
 variable "image_tag" {
   description = "Tag of the ShinyProxy and session images in ECR"
   type        = string

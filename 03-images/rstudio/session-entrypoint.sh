@@ -3,7 +3,7 @@
 # session-entrypoint.sh - Become the AD User, Then Start RStudio Server
 # ------------------------------------------------------------------------------
 # Purpose:
-#   - Runs as root inside the session task. session-identity.sh (shared
+#   - Runs as root inside the session pod. session-identity.sh (shared
 #     with the other app images) becomes the AD user; this script configures
 #     rserver for single-user use behind ShinyProxy and execs it.
 #
@@ -34,7 +34,7 @@ source /usr/local/lib/session/session-identity.sh
 ROOT_PATH="${SHINYPROXY_PUBLIC_PATH:-/}"
 [[ "$ROOT_PATH" =~ ^/[A-Za-z0-9/._-]*$ ]] || die "unexpected public path '$ROOT_PATH'"
 
-# auth-none is safe only because the task's security group admits port 8787
+# auth-none is safe only because the session network policy admits port 8787
 # from ShinyProxy alone. ShinyProxy is the only path in.
 cat > /etc/rstudio/rserver.conf <<EOF
 rsession-which-r=/usr/local/bin/R

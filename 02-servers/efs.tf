@@ -48,7 +48,7 @@ resource "aws_security_group" "efs_sg" {
 resource "aws_efs_file_system" "efs" {
   encrypted = true
   tags = {
-    Name = "shinyproxy-efs"
+    Name = "shinyproxy-eks-efs"
   }
 }
 
