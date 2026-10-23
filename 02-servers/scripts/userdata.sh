@@ -209,8 +209,8 @@ chmod 2770 /efs/data
 chmod 700 /home/*
 
 cd /efs
-git clone https://github.com/mamonaco1973/aws-vscode-shinyproxy.git
-chmod -R 775 aws-vscode-shinyproxy
-chgrp -R ${force_group} aws-vscode-shinyproxy
+git clone https://github.com/mamonaco1973/aws-shinyproxy-eks.git
+chmod -R 775 aws-shinyproxy-eks
+chgrp -R ${force_group} aws-shinyproxy-eks
 
 realm list
