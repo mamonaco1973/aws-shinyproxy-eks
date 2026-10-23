@@ -25,8 +25,8 @@
 #
 # Requirements:
 #   - AWS CLI configured with sufficient IAM permissions.
-#   - Terraform and Docker installed and in PATH. kubectl is optional; if
-#     present, its kubeconfig is pointed at the new cluster.
+#   - Terraform, Docker and kubectl installed and in PATH. The kubeconfig
+#     is pointed at the new cluster at the end.
 #   - check_env.sh and validate.sh present in working directory.
 #
 # Exit Codes:
@@ -147,10 +147,8 @@ terraform init
 terraform apply -auto-approve -var "image_tag=${image_tag}"
 cd ..
 
-if command -v kubectl >/dev/null 2>&1; then
-  aws eks update-kubeconfig --name "$cluster_name" >/dev/null
-  echo "NOTE: kubectl context set to cluster ${cluster_name}."
-fi
+aws eks update-kubeconfig --name "$cluster_name" >/dev/null
+echo "NOTE: kubectl context set to cluster ${cluster_name}."
 
 
 # ================================================================================

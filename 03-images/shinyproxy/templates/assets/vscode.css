@@ -344,6 +344,17 @@ body.vscode-themed {
 
 #appPage .btn-default:hover { background: var(--accent-hover); color: #fff; }
 
+/* "Back to apps" beside the primary action on the end-state screens. */
+#appPage .btn-back {
+  margin-left: 8px;
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 3px;
+}
+
+#appPage .btn-back:hover { background: var(--accent); color: #fff; text-decoration: none; }
+
 /* The editor iframe fills everything below the 40 px title bar. */
 #appPage #iframeinsert iframe { border: 0; }
 

@@ -7,13 +7,15 @@
 #   Tear down the ShinyProxy on EKS lab in reverse dependency order.
 #
 # Teardown Flow:
-#     1. Destroy ShinyProxy and its namespace. ShinyProxy deletes its
-#        session pods on shutdown; deleting the namespace removes any that
-#        a crashed ShinyProxy left behind.
+#     1. Stop ShinyProxy and delete any session pods still running, then
+#        destroy the rest of the ShinyProxy phase and its namespace.
 #     2. Destroy the EKS cluster (Auto Mode terminates its nodes) and ALB.
 #     3. Destroy the ECR repositories (images included).
 #     4. Destroy EFS and admin servers.
 #     5. Delete Secrets Manager entries, then the domain controller and VPC.
+#
+# Requirements:
+#   - AWS CLI, Terraform and kubectl in PATH.
 #
 # ================================================================================
 
@@ -31,7 +33,19 @@ CLUSTER="shinyproxy-eks"
 # Phase 05 reads the cluster at plan time, so skip it once the cluster is
 # gone (a re-run after a partial teardown).
 if aws eks describe-cluster --name "$CLUSTER" >/dev/null 2>&1; then
-  echo "NOTE: Destroying ShinyProxy and its session pods..."
+  # ShinyProxy deletes its session pods on a clean shutdown, but any it has
+  # lost track of keep running. While a pod mounts the EFS claim, Kubernetes
+  # will not delete the claim, and Terraform waits on it forever - so stop
+  # ShinyProxy first, then remove whatever session pods are left.
+  echo "NOTE: Stopping ShinyProxy and removing session pods..."
+
+  aws eks update-kubeconfig --name "$CLUSTER" >/dev/null
+  kubectl -n shinyproxy delete deployment shinyproxy \
+    --ignore-not-found --wait=true --timeout=180s
+  kubectl -n shinyproxy delete pod -l openanalytics.eu/sp-proxied-app=true \
+    --ignore-not-found --wait=true --timeout=300s
+
+  echo "NOTE: Destroying the ShinyProxy phase..."
 
   cd 05-shinyproxy
   terraform init

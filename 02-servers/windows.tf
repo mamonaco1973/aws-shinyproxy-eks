@@ -73,7 +73,7 @@ resource "aws_instance" "windows_ad_instance" {
     admin_secret = "admin_ad_credentials_shinyproxy_eks"
     domain_fqdn  = var.dns_zone
     samba_server = aws_instance.efs_gateway_instance.private_dns
-    rdp_group    = "shinyproxy-users"
+    rdp_group    = "${lower(var.netbios)}-users"
     netbios      = var.netbios
   })
 

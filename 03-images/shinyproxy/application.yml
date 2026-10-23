@@ -72,14 +72,16 @@ proxy:
   # ----------------------------------------------------------------------------
   # ShinyProxy runs inside the cluster, so it uses its service account and
   # reaches session pods directly on their pod IPs (internal-networking).
-  # A session that needs a new node waits for Auto Mode to launch one and
-  # pull a ~1 GB image; give it five minutes.
+  # Sessions run in the "sessions" node pool (8 vCPU nodes, 05-shinyproxy/
+  # node_pool.tf), which they reach with this selector and the toleration in
+  # the pod patches below. A session that needs a new node waits for Auto
+  # Mode to launch one and pull a ~1 GB image; give it five minutes.
   container-backend: kubernetes
   kubernetes:
     internal-networking: true
     namespace: ${SESSION_NAMESPACE}
     image-pull-policy: IfNotPresent
-    node-selector: kubernetes.io/arch=amd64
+    node-selector: kubernetes.io/arch=amd64,karpenter.sh/nodepool=sessions
     pod-wait-time: 300000
 
   # ----------------------------------------------------------------------------
@@ -94,6 +96,7 @@ proxy:
   # The pod patches, shared by every spec:
   #   - mount the EFS claim at /home (its home/ directory) and /efs (its root);
   #     ShinyProxy's own container-volumes would be hostPath volumes
+  #   - tolerate the sessions node pool's taint
   #   - keep the namespace's service account token out of the pod, so the
   #     user has no credentials for the Kubernetes API
   #   - stop Auto Mode from evicting a live session to consolidate nodes
@@ -130,6 +133,13 @@ proxy:
               subPath: home
             - name: efs
               mountPath: /efs
+        - op: add
+          path: /spec/tolerations
+          value:
+            - key: shinyproxy/session
+              operator: Equal
+              value: "true"
+              effect: NoSchedule
         - op: add
           path: /spec/automountServiceAccountToken
           value: false

@@ -92,7 +92,7 @@ resource "aws_instance" "efs_gateway_instance" {
     efs_mnt_server = aws_efs_mount_target.efs_mnt_1.dns_name
     netbios        = var.netbios
     realm          = var.realm
-    force_group    = "shinyproxy-users"
+    force_group    = "${lower(var.netbios)}-users"
   })
 
   # --------------------------------------------------------------------------

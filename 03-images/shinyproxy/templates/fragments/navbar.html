@@ -37,6 +37,8 @@
                     <span sec:authentication="name"></span>
                 </span>
 
+                <!-- Back to the app list; the session keeps running and reopens from there. -->
+                <a class="tb-btn" role="button" th:href="@{/}" th:if="${page == 'app'}">Apps</a>
                 <a class="tb-btn" role="button" id="switchInstancesModal-btn"
                    th:if="${page == 'app' && appMaxInstances.get(appName) != 1}">Switch instance</a>
                 <a class="tb-btn app-details-current-btn" role="button"

@@ -72,17 +72,21 @@
         </div>
         <div class="loading" id="appStopped">
             <div class="loading-txt">
-                This app has been stopped, you can now close this tab.<br><br>
+                This app has been stopped.<br><br>
                 <span class="refreshButton">
 				<button class="btn btn-default app-restart-btn">Restart app</button>
+			
+				<a class="btn btn-back" th:href="@{/}">Back to apps</a>
 			</span>
             </div>
         </div>
         <div class="loading" id="appPaused">
             <div class="loading-txt">
-                This app has been paused, you can now close this tab.<br><br>
+                This app has been paused.<br><br>
                 <span class="refreshButton">
 				<button class="btn btn-default app-restart-btn">Resume app</button>
+			
+				<a class="btn btn-back" th:href="@{/}">Back to apps</a>
 			</span>
             </div>
         </div>
@@ -104,6 +108,8 @@
                 Failed to reload <span th:text="${appTitle}"></span><br><br>
                 <span class="refreshButton">
 				<button class="btn btn-default refresh-page-btn">Refresh page</button>
+			
+				<a class="btn btn-back" th:href="@{/}">Back to apps</a>
 			</span>
             </div>
         </div>
@@ -113,6 +119,8 @@
                 <div id="startFailedMessage"></div>
                 <span class="refreshButton">
 				<button class="btn btn-default refresh-page-btn">Try again</button>
+			
+				<a class="btn btn-back" th:href="@{/}">Back to apps</a>
 			</span>
             </div>
         </div>
@@ -121,12 +129,15 @@
                 This app has crashed and has been stopped.<br><br>
                 <span class="refreshButton">
 				<button class="btn btn-default app-restart-btn">Restart app</button>
+			
+				<a class="btn btn-back" th:href="@{/}">Back to apps</a>
 			</span>
             </div>
         </div>
         <div class="loading" id="appTransferred">
             <div class="loading-txt">
                 This app has been transferred to another user.<br><br>
+                <a class="btn btn-back" th:href="@{/}">Back to apps</a>
             </div>
         </div>
         <div class="loading" id="userLoggedOut">

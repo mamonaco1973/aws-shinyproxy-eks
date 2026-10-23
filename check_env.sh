@@ -7,8 +7,7 @@
 #   - Verifies AWS CLI authentication and connectivity.
 #
 # Scope:
-#   - Checks for aws, terraform, jq and docker binaries.
-#   - Reports whether kubectl is present (optional: troubleshooting only).
+#   - Checks for aws, terraform, jq, docker and kubectl binaries.
 #   - Confirms the caller identity via AWS STS.
 #
 # Fast-Fail Behavior:
@@ -20,6 +19,7 @@
 #   - Terraform installed.
 #   - jq installed.
 #   - Docker installed, with the daemon reachable by this user.
+#   - kubectl installed (destroy.sh uses it to clear session pods).
 # ==============================================================================
 
 set -euo pipefail
@@ -29,7 +29,7 @@ set -euo pipefail
 # ------------------------------------------------------------------------------
 echo "NOTE: Validating required commands in PATH."
 
-commands=("aws" "terraform" "jq" "docker")
+commands=("aws" "terraform" "jq" "docker" "kubectl")
 
 for cmd in "${commands[@]}"; do
   if ! command -v "${cmd}" >/dev/null 2>&1; then
@@ -41,14 +41,6 @@ for cmd in "${commands[@]}"; do
 done
 
 echo "NOTE: All required commands are available."
-
-# Not needed to deploy - Terraform talks to the cluster itself - but it is
-# how you look at pods and logs afterwards.
-if command -v kubectl >/dev/null 2>&1; then
-  echo "NOTE: Found optional command: kubectl"
-else
-  echo "NOTE: Optional command not found: kubectl (needed only for troubleshooting)"
-fi
 
 # ------------------------------------------------------------------------------
 # AWS Connectivity Check

@@ -241,12 +241,13 @@ resource "kubernetes_deployment_v1" "shinyproxy" {
     }
   }
 
-  # Session pods mount the claim and are policed by the policies; both must
-  # exist before ShinyProxy can start one.
+  # Session pods mount the claim, are policed by the policies and run in the
+  # sessions node pool; all must exist before ShinyProxy can start one.
   depends_on = [
     kubernetes_role_binding_v1.shinyproxy,
     kubernetes_persistent_volume_claim_v1.efs,
     kubernetes_network_policy_v1.sessions,
+    kubernetes_manifest.session_node_pool,
   ]
 }
 
