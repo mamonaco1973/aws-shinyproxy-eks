@@ -15,14 +15,15 @@
 #   launch and the image pull.
 #
 #   The built-in general-purpose pool (on-demand c/m/r, amd64) carries
-#   ShinyProxy and the sessions; the system pool carries cluster add-ons.
+#   ShinyProxy; the system pool carries cluster add-ons. Sessions run in a
+#   separate 8 vCPU "sessions" pool, defined in phase 05 (node_pool.tf).
 #
 # Session Pods:
 #   Not defined here or in Terraform at all. ShinyProxy creates one pod per
 #   session through the Kubernetes API and deletes it when the session
 #   ends. Their shape comes from the specs in 03-images/shinyproxy/
-#   application.yml; the namespace, RBAC and network policies that contain
-#   them are phase 05.
+#   application.yml; the namespace, RBAC, network policies and node pool
+#   that contain them are phase 05.
 #
 # Design Notes:
 #   - Auto Mode also runs the load balancer controller, which phase 05 uses

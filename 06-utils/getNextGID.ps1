@@ -1,6 +1,7 @@
 # ============================================================================================
 # Script Name : getNextGID.ps1
-# Description : Retrieves the next available GID number from the VS Code cluster service.
+# Description : Retrieves the next available GID number from the mini-AD domain controller's
+#               nextids service.
 # ============================================================================================
 
 # --------------------------------------------------------------------------------------------

@@ -6,7 +6,7 @@
 #   Validates the deployed AWS lab environment by retrieving:
 #     - Windows AD Administration host (public DNS for RDP access)
 #     - Linux EFS/Samba gateway host (public DNS / public IP)
-#     - VS Code Application Load Balancer endpoint (HTTPS)
+#     - ShinyProxy Application Load Balancer endpoint (HTTPS)
 #
 # Notes:
 #   - Requires AWS CLI configured with appropriate permissions.

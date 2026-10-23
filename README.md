@@ -9,7 +9,7 @@ This project is a model for deploying **browser-based apps** on Amazon Web Servi
 3. Reverse-proxies the browser to it, including the WebSocket traffic both apps run on.
 4. Deletes the pod when the session ends.
 
-There are no node groups to size. In Auto Mode, AWS runs Karpenter for you: when a session pod cannot be scheduled, it launches an EC2 instance sized for it, and it removes instances once nothing is left on them. Sessions pack onto shared nodes, so a session that lands on a warm node skips both the instance launch and the image pull. With nobody signed in, the only compute running is the node that hosts ShinyProxy. Adding another app is a new container image plus a new entry in ShinyProxy's configuration.
+There are no node groups to size. In Auto Mode, AWS runs Karpenter for you: when a session pod cannot be scheduled, it launches an EC2 instance sized for it, and it removes instances once nothing is left on them. Sessions pack onto shared nodes, so a session that lands on a warm node skips both the instance launch and the image pull. With nobody signed in, the only compute running is the node that hosts ShinyProxy (and the cluster add-ons). Adding another app is a new container image plus a new entry in ShinyProxy's configuration.
 
 Key capabilities demonstrated:
 
@@ -96,7 +96,7 @@ When the deployment completes, the following resources are created:
   - A security group for the ALB, plus rules letting it reach ShinyProxy's ports on the cluster security group
   - Network policies: session pods accept the app ports from ShinyProxy only, and cannot reach the instance metadata endpoint
   - IAM roles for the EKS cluster, its Auto Mode nodes (join the cluster, pull from ECR) and the EFS CSI controller — none for ShinyProxy or the sessions
-  - A namespace-scoped Kubernetes role letting ShinyProxy create and delete pods in its own namespace, and nothing else
+  - A namespace-scoped Kubernetes role letting ShinyProxy manage session pods and its headless service, and read events, in its own namespace only
   - Secrets in AWS Secrets Manager for the AD administrator, the test users and the ShinyProxy LDAP service account; the last is copied into a Kubernetes secret
 
 - **Active Directory Server:**
@@ -138,11 +138,11 @@ ShinyProxy runs as a Kubernetes Deployment with a single pod in the `shinyproxy`
   | VS Code (large) | `vscode-users` | 4 vCPU | 16 GiB | 8080 |
   | RStudio | `rstudio-users` | 2 vCPU | 8 GiB | 8787 |
 
-- **Launch.** For each session ShinyProxy creates a pod (`sp-pod-<id>-0`) in its namespace, waits for it to be ready, and proxies `/app_proxy/<id>/` to the pod's IP on the app's port. A short list of JSON patches in `application.yml` finishes each pod: it mounts the EFS claim, withholds the service account token, and marks the pod `karpenter.sh/do-not-disrupt` so Auto Mode never evicts a live session to consolidate nodes. The bind password reaches the pod as a `secretKeyRef` to the `ldap-bind` secret; ShinyProxy never writes the value into a pod spec.
+- **Launch.** For each session ShinyProxy creates a pod (`sp-pod-<id>-0`) in its namespace, waits for it to be ready, and proxies `/app_proxy/<id>/` to the pod's IP on the app's port. A short list of JSON patches in `application.yml` finishes each pod: it mounts the EFS claim, tolerates the `sessions` node pool's taint, withholds the service account token, and marks the pod `karpenter.sh/do-not-disrupt` so Auto Mode never evicts a live session to consolidate nodes. The bind password reaches the pod as a `secretKeyRef` to the `ldap-bind` secret; ShinyProxy never writes the value into a pod spec.
 - **Node packing.** Sessions run in a dedicated `sessions` node pool ([05-shinyproxy/node_pool.tf](05-shinyproxy/node_pool.tf)) built from 8 vCPU instances. Auto Mode otherwise buys the cheapest instance that fits the one pod it is waiting on, which gave every 1 vCPU session a 2 vCPU node of its own. Now the first session buys an 8 vCPU node and later ones pack onto it. An empty session node is removed five minutes after its last session ends, and the pool is capped at 32 vCPU (four nodes).
 - **Start-up time.** A session that needs a new node waits for Auto Mode to launch it and pull the image, about 40 seconds for VS Code. One that fits on a running node skips the launch, and once that node has pulled the image it starts in seconds. RStudio's image is several times larger than VS Code's. ShinyProxy waits up to five minutes.
 - **Lifetime.** The ShinyProxy page sends heartbeats while the tab is open. A session is stopped 30 minutes after the last one (tab closed, laptop asleep) and in any case after 12 hours. Stopping a session deletes its pod; Auto Mode removes the node once nothing is left on it.
-- **Sign out.** ShinyProxy's own title bar sits above every app, so no button has to be injected into the apps themselves.
+- **Navigation and sign-out.** ShinyProxy's own title bar sits above every app, so no button has to be injected into the apps themselves. **Apps** returns to the app list and leaves the session running (opening the app again resumes it), **Stop session** ends it, and **Sign out** signs out.
 - **Load balancer.** The ALB and its target group belong to Terraform (phase 4), so the certificate can be issued for the ALB's DNS name before anything runs in the cluster. A `TargetGroupBinding` (phase 5) hands the target group to Auto Mode's load balancer controller, which keeps the ShinyProxy pod's IP registered as the pod is replaced.
 
 ### Look and Feel
@@ -152,8 +152,8 @@ ShinyProxy's pages are replaced by VS Code-styled ones in [03-images/shinyproxy/
 | File | Page |
 |------|------|
 | `login.html` | Sign-in card. The visible form never submits; `signin.js` copies the credentials into a hidden form, because carrier phishing filters block a plain password form on an `*.elb.amazonaws.com` hostname |
-| `fragments/navbar.html` | Title bar on every signed-in page; also loads `assets/vscode.css`, so the app list and admin pages are re-themed without copying them |
-| `app.html` | Copy of ShinyProxy 3.2.4's app page with a "Starting your session" card; re-copy it when upgrading ShinyProxy |
+| `fragments/navbar.html` | Title bar on every signed-in page, with an **Apps** button back to the app list on app pages; also loads `assets/vscode.css`, so the app list and admin pages are re-themed without copying them |
+| `app.html` | Copy of ShinyProxy 3.2.4's app page with a "Starting your session" card, and a **Back to apps** link on the stopped, paused, crashed and failed screens; re-copy it when upgrading ShinyProxy and carry those changes over |
 | `error.html`, `auth-error.html`, `app-access-denied.html`, `logout-success.html` | Error and status cards |
 
 ### The Session Images
@@ -269,9 +269,9 @@ All groups are Security / Universal, created in `CN=Users` of the `shinyproxyeks
 
 | Username   | Full Name          | uidNumber | gidNumber | Groups Joined | Apps |
 |------------|--------------------|-----------|-----------|---------------|------|
-| jsmith     | John Smith         | 10001     | 10001     | us, linux-admins, app-admins, vscode-users, rstudio-users | All |
+| jsmith     | John Smith         | 10001     | 10001     | us, linux-admins, app-admins, vscode-users, rstudio-users, Domain Admins | All |
 | edavis     | Emily Davis        | 10002     | 10001     | us, vscode-users | VS Code |
-| rpatel     | Raj Patel          | 10003     | 10001     | india, linux-admins, app-admins, vscode-users, rstudio-users | All |
+| rpatel     | Raj Patel          | 10003     | 10001     | india, linux-admins, app-admins, vscode-users, rstudio-users, Domain Admins | All |
 | akumar     | Amit Kumar         | 10004     | 10001     | india, rstudio-users | RStudio |
 | shinyproxy | ShinyProxy Service | 10050     | 10006     | service-accounts | None |
 
